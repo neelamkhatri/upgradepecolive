@@ -1,0 +1,62 @@
+<?php
+
+/**
+ * @file
+ * Contains views_periodic_data_export.module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\views\Views;
+use Drupal\views_periodic_data_export\Services\ViewsPeriodicDataExportService;
+
+define('PERIODIC_REPORTS_FOLDER', 'views_periodic_data_export');
+
+/**
+ * Implements hook_help().
+ */
+function views_periodic_data_export_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    // Main module help for the views_periodic_data_export module.
+    case 'help.page.views_periodic_data_export':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Views periodic data export on queue') . '</p>';
+      return $output;
+
+    default:
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function views_periodic_data_export_theme() {
+  return [
+    'periodic_export_list' => [
+      'variables' => [
+        'url' => NULL,
+      ],
+    ],
+  ];
+}
+
+/**
+ * Implements hook_cron().
+ */
+function views_periodic_data_export_cron()
+{
+  $periodic_export_views = Views::getApplicableViews('periodic_export');
+
+  foreach ($periodic_export_views as $item) {
+    $viewId = $item[0];
+    $displayId = $item[1];
+
+    $view = Views::getView($viewId);
+    $view->setDisplay($displayId);
+    $periodicExportService = new ViewsPeriodicDataExportService($view);
+
+    if ($view->display_handler->isEnabled() && $periodicExportService->canQueueNow()){
+      $periodicExportService->initQueueViewsPeriodicDataExport();
+    }
+  }
+}

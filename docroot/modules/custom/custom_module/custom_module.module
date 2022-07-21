@@ -1,0 +1,2257 @@
+<?php
+
+/**
+ * @file
+ * Module file for Contentimport.
+ */
+
+use Drupal\node\Entity\Node;
+use Drupal\file\Entity\File;
+use \Drupal\Core\Url;
+use Drupal\taxonomy\Entity\Vocabulary;
+use Drupal\taxonomy\Entity\Term;
+use Drupal\user\Entity\User;
+use Drupal\views\Views;
+use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+
+use Drupal\webform\Entity\Webform;
+use Drupal\webform\Entity\WebformSubmission;
+use Drupal\webform\WebformSubmissionForm;
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function contentimport_preprocess_page(&$variables) {
+  $variables['page']['#cache']['contexts'][] = 'route';
+  $urlRoute = \Drupal::routeMatch()->getRouteName();
+  if (($urlRoute == 'custom_module.admin_settings')) {
+    $variables['#attached']['library'][] = 'custom_module/common-styling';
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function custom_module_form_views_exposed_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+    if (isset($form['#id']) && $form['#id'] == 'views-exposed-form-blog-blog-all') {
+      $options = array(
+        '' => 'Filter By Date',
+        '2021' => t('2021'),
+        '2020' => t('2020'),
+        '2019' => t('2019'),
+        '2018' => t('2018'),
+        '2017' => t('2017'),
+        '2016' => t('2016'),
+        '2015' => t('2015'),
+        '2014' => t('2014'),
+      );
+      
+      # the drupal checkboxes form field definition
+      $form['publish'] = array(
+        // '#title' => t('Filter By Date'),
+        '#type' => 'select',
+        '#options' => $options,
+        "#attributes" => [
+          'id' => 'published_date'
+        ]
+        // '#multiple' => TRUE,
+      );
+    }
+  }
+
+/**
+ * To get all Content Type Fields.
+ */
+function get_fields($contentType) {
+  $fields = [];
+  foreach (\Drupal::service('entity_field.manager')
+    ->getFieldDefinitions('node', $contentType) as $field_definition) {
+    if (!empty($field_definition->getTargetBundle())) {
+      $fields['name'][] = $field_definition->getName();
+      $fields['type'][] = $field_definition->getType();
+      $fields['setting'][] = $field_definition->getSettings();
+    }
+  }
+  return $fields;
+}
+
+/**
+ * To get Reference field ids.
+ */
+function get_term_reference($voc, $terms) {
+  $vocName = strtolower($voc);
+  $vid = preg_replace('@[^a-z0-9_]+@', '_', $vocName);
+  $vocabularies = Vocabulary::loadMultiple();
+  /* Create Vocabulary if it is not exists */
+  if (!isset($vocabularies[$vid])) {
+    create_voc($vid, $voc);
+  }
+  $termArray = array_map('trim', explode(',', $terms));
+  $termIds = [];
+  foreach ($termArray as $term) {
+    $term_id = get_term_id($term, $vid);
+    if (empty($term_id)) {
+      $term_id = create_term($voc, $term, $vid);
+    }
+    $termIds[]['target_id'] = $term_id;
+  }
+  return $termIds;
+}
+
+/**
+ * To Create Terms if it is not available.
+ */
+function create_voc($vid, $voc) {
+  $vocabulary = Vocabulary::create(
+        [
+          'vid' => $vid,
+          'machine_name' => $vid,
+          'name' => $voc,
+        ]
+    );
+  $vocabulary->save();
+}
+
+/**
+ * To Create Terms if it is not available.
+ */
+function create_term($voc, $term, $vid) {
+  Term::create(
+        [
+          'parent' => [$voc],
+          'name' => $term,
+          'vid' => $vid,
+        ]
+    )->save();
+  $termId = get_term_id($term, $vid);
+  return $termId;
+}
+
+/**
+ * To get Termid available.
+ */
+function get_term_id($term, $vid) {
+  $query = \Drupal::database()->select('taxonomy_term_field_data', 't');
+  $query->fields('t', ['tid']);
+  $query->condition('t.vid', $vid);
+  $query->condition('t.name', $term);
+  $termRes = $query->execute()->fetchAll();
+  foreach ($termRes as $val) {
+    $term_id = $val->tid;
+  }
+  return $term_id;
+}
+
+/**
+ * To get node available.
+ */
+function get_node_id($title) {
+  $nodeReference = [];
+  $db = \Drupal::database();
+  foreach ($title as $key => $value) {
+    $query = $db->select('node_field_data', 'n');
+    $query->fields('n', ['nid']);
+    $nodeId = $query
+      ->condition('n.title', trim($value))
+      ->execute()
+      ->fetchField();
+    $nodeReference[$key]['target_id'] = $nodeId;
+  }
+  return $nodeReference;
+}
+
+/**
+ * To get user id.
+ */
+function get_user_id($name) {
+  $user_id = \Drupal::database()
+    ->select('users_field_data', 'u')
+    ->fields('u', ['uid'])
+    ->condition('u.name', trim($name))
+    ->execute()
+    ->fetchField();
+  return $user_id;
+}
+
+/**
+ * To get user information based on emailIds.
+ */
+function get_user_info($userArray) {
+  $uids = [];
+  foreach ($userArray as $usermail) {
+    if (filter_var($usermail, FILTER_VALIDATE_EMAIL)) {
+      $users = \Drupal::entityTypeManager()->getStorage('user')
+        ->loadByProperties(
+                [
+                  'mail' => $usermail,
+                ]
+            );
+    }
+    else {
+      $users = \Drupal::entityTypeManager()->getStorage('user')
+        ->loadByProperties(
+                [
+                  'name' => $usermail,
+                ]
+            );
+    }
+    $user = reset($users);
+    if ($user) {
+      $uids[] = $user->id();
+    }
+    else {
+      $user = User::create();
+      $user->uid = '';
+      $user->setUsername($usermail);
+      $user->setEmail($usermail);
+      $user->set("init", $usermail);
+      $user->enforceIsNew();
+      $user->activate();
+      $user->save();
+      $users = \Drupal::entityTypeManager()->getStorage('user')
+        ->loadByProperties(['mail' => $usermail]);
+      $uids[] = $user->id();
+    }
+  }
+  return $uids;
+}
+
+/**
+ * To import data as Content type nodes.
+ */
+function create_node($filedata, $contentType, $mode = '') {
+  drupal_flush_all_caches();
+  global $base_url;
+#echo "<pre>Create node filedata: ";kint($filedata);exit;
+  $logFileName = "custom_module_log.txt";
+  $logFile = fopen("sites/default/files/" . $logFileName, "w") or die("There is no permission to create log file. Please give permission for sites/default/file!");
+  $fields = get_fields($contentType);
+  $fieldNames = $fields['name'];
+  $fieldTypes = $fields['type'];
+  $fieldSettings = $fields['setting'];
+  
+  #echo "<pre>Create node contentType: ";kint($fields);exit;
+  
+  // Code for import csv file.
+  $mimetype = 1;
+  if ($mimetype) {
+    
+    if (!is_object($filedata)) {
+        $location = $filedata;
+        #$location = file_create_url($filedata);
+        #$locatoin = 'temporary://agents_2.csv';
+    } else {
+        $location = $filedata->destination;
+    }
+    
+    
+    if (($handle = fopen($location, "r")) !== FALSE) {
+      #echo "<pre>CSV: $location";kint($handle);exit;
+        
+      $keyIndex = [];
+      $index = 0;
+      $current_time = date('Y-m-d H:i:s');
+      $logVariationFields = "***************************** Content Import Begins At {$current_time} ************************************ \n \n ";
+      while (($data = fgetcsv($handle)) !== FALSE) {
+          if (empty($data)) {
+              continue;
+          }
+          #echo "<pre>CSV Data: ";kint($data);exit;
+        $index++;
+        if ($index < 2) {
+          array_push($fieldNames, 'title');
+          array_push($fieldTypes, 'text');
+          array_push($fieldNames, 'langcode');
+          array_push($fieldTypes, 'lang');
+          array_push($fieldNames, 'author');
+          array_push($fieldTypes, 'authored_by');
+          if (array_search('langcode', $data) === FALSE) {
+            $logVariationFields .= "Langcode missing --- Assuming EN as default langcode.. Import continues  \n \n";
+            $data[count($data)] = 'langcode';
+          }
+
+          foreach ($fieldNames as $fieldValues) {
+            $i = 0;
+            foreach ($data as $dataValues) {
+              if ($fieldValues == $dataValues) {
+                $logVariationFields .= "Data Type : " . $fieldValues . "  Matches \n";
+                $keyIndex[$fieldValues] = $i;
+              }
+              $i++;
+            }
+          }
+          continue;
+        }
+        if (!isset($keyIndex['title']) || !isset($keyIndex['langcode'])) {
+          \Drupal::messenger()
+            ->addError(t('title or langcode is missing in CSV file. Please add these fields and import again'));
+          $url = $base_url . "/admin/config/content/custom_module";
+          header('Location:' . $url);
+          exit;
+        }
+        
+        $logVariationFields .= "********************************* Importing node ****************************  \n \n";
+        // Default Language.
+        $nodeArray['langcode'] = 'en';
+        for ($f = 0; $f < count($fieldNames); $f++) {
+          switch ($fieldTypes[$f]) {
+            case 'image':
+              $logVariationFields .= "Importing Image (" . trim($data[$keyIndex[$fieldNames[$f]]]) . ") :: ";
+              if (!empty($data[$keyIndex[$fieldNames[$f]]])) {
+                $imgIndex = trim($data[$keyIndex[$fieldNames[$f]]]);
+                $files = glob('sites/default/files/' . $contentType . '/images/' . $imgIndex);
+                $fileExists = file_exists('sites/default/files/' . $imgIndex);
+                if (!$fileExists) {
+                  $images = [];
+                  foreach ($files as $file_name) {
+                    $image = File::create(['uri' => 'public://' . $contentType . '/images/' . basename($file_name)]);
+                    $image->save();
+                    $images[basename($file_name)] = $image;
+                    $imageId = $images[basename($file_name)]->id();
+                  }
+                  $nodeArray[$fieldNames[$f]] = [
+                    [
+                      'target_id' => $imageId,
+                      'alt' => $images['title'],
+                      'title' => $images['title'],
+                    ],
+                  ];
+                  $logVariationFields .= "Image uploaded successfully \n ";
+                }
+              }
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'entity_reference':
+              $logVariationFields .= "Importing Reference Type (" . $fieldSettings[$f]['target_type'] . ") :: ";
+              if ($fieldSettings[$f]['target_type'] == 'taxonomy_term') {
+                $target_bundles = $fieldSettings[$f]['handler_settings']['target_bundles'];
+                // If vocabulary field settings target is single, assume it.
+                if (count($target_bundles) == 1 && !empty($data[$keyIndex[$fieldNames[$f]]])) {
+                  $terms = get_term_reference($target_bundles[key($target_bundles)], $data[$keyIndex[$fieldNames[$f]]]);
+                }
+                // If not, assume vocabulary is added with ":" delimiter.
+                else {
+                  $reference = explode(":", $data[$keyIndex[$fieldNames[$f]]]);
+                  if (is_array($reference) && $reference[0] != '') {
+                    $terms = get_term_reference($reference[0], $reference[1]);
+                  }
+                }
+                if (!empty($terms)) {
+                  $nodeArray[$fieldNames[$f]] = $terms;
+                }
+              }
+              elseif ($fieldSettings[$f]['target_type'] == 'user') {
+                $userArray = explode(', ', $data[$keyIndex[$fieldNames[$f]]]);
+                $users = get_user_info($userArray);
+                $nodeArray[$fieldNames[$f]] = $users;
+              }
+              elseif ($fieldSettings[$f]['target_type'] == 'node') {
+                $nodeArrays = explode(':', $data[$keyIndex[$fieldNames[$f]]]);
+                $nodeReference1 = get_node_id($nodeArrays);
+                $nodeArray[$fieldNames[$f]] = $nodeReference1;
+              }
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'text_long':
+            case 'text':
+              $logVariationFields .= "Importing Content (" . $fieldNames[$f] . ") :: ";
+              $nodeArray[$fieldNames[$f]] = [
+                'value' => $data[$keyIndex[$fieldNames[$f]]],
+                'format' => 'full_html',
+              ];
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'entity_reference_revisions':
+            case 'text_with_summary':
+              $logVariationFields .= "Importing Content (" . $fieldNames[$f] . ") :: ";
+              $nodeArray[$fieldNames[$f]] = [
+                'summary' => substr(strip_tags($data[$keyIndex[$fieldNames[$f]]]), 0, 100),
+                'value' => $data[$keyIndex[$fieldNames[$f]]],
+                'format' => 'full_html',
+              ];
+              $logVariationFields .= " Success \n";
+
+              break;
+
+            case 'datetime':
+              $logVariationFields .= "Importing Datetime (" . $fieldNames[$f] . ") :: ";
+              $dateArray = explode(':', $data[$keyIndex[$fieldNames[$f]]]);
+              if (count($dateArray) > 1) {
+                $dateTimeStamp = strtotime($data[$keyIndex[$fieldNames[$f]]]);
+                $newDateString = date('Y-m-d\TH:i:s', $dateTimeStamp);
+              }
+              else {
+                $dateTimeStamp = strtotime($data[$keyIndex[$fieldNames[$f]]]);
+                $newDateString = date('Y-m-d', $dateTimeStamp);
+              }
+              $nodeArray[$fieldNames[$f]] = ["value" => $newDateString];
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'timestamp':
+              $logVariationFields .= "Importing Content (" . $fieldNames[$f] . ") :: ";
+              $nodeArray[$fieldNames[$f]] = ["value" => $data[$keyIndex[$fieldNames[$f]]]];
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'boolean':
+              $logVariationFields .= "Importing Boolean (" . $fieldNames[$f] . ") :: ";
+              $nodeArray[$fieldNames[$f]] = ($data[$keyIndex[$fieldNames[$f]]] == 'On' ||
+                                  $data[$keyIndex[$fieldNames[$f]]] == 'Yes' ||
+                                  $data[$keyIndex[$fieldNames[$f]]] == 'on' ||
+                                  $data[$keyIndex[$fieldNames[$f]]] == 'yes') ? 1 : 0;
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'langcode':
+              $logVariationFields .= "Importing Langcode (" . $fieldNames[$f] . ") :: ";
+              $nodeArray[$fieldNames[$f]] = ($data[$keyIndex[$fieldNames[$f]]] != '') ? $data[$keyIndex[$fieldNames[$f]]] : 'en';
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'geolocation':
+              $logVariationFields .= "Importing Geolocation Field (" . $fieldNames[$f] . ") :: ";
+              $geoArray = explode(";", $data[$keyIndex[$fieldNames[$f]]]);
+              if (count($geoArray) > 0) {
+                $geoMultiArray = [];
+                for ($g = 0; $g < count($geoArray); $g++) {
+                  $latlng = explode(",", $geoArray[$g]);
+                  for ($l = 0; $l < count($latlng); $l++) {
+                    $latlng[$l] = floatval(preg_replace("/\[^0-9,.]/", "", $latlng[$l]));
+                  }
+                  array_push(
+                        $geoMultiArray, [
+                          'lat' => $latlng[0],
+                          'lng' => $latlng[1],
+                        ]
+                    );
+                }
+                $nodeArray[$fieldNames[$f]] = $geoMultiArray;
+              }
+              else {
+                $latlng = explode(",", $data[$keyIndex[$fieldNames[$f]]]);
+                for ($l = 0; $l < count($latlng); $l++) {
+                  $latlng[$l] = floatval(preg_replace("/\[^0-9,.]/", "", $latlng[$l]));
+                }
+                $nodeArray[$fieldNames[$f]] = ['lat' => $latlng[0], 'lng' => $latlng[1]];
+              }
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'entity_reference_revisions':
+              /* In Progress */
+              break;
+
+            case 'list_string':
+              $logVariationFields .= "Importing Content (" . $fieldNames[$f] . ") :: ";
+              $listArray = explode(",", $data[$keyIndex[$fieldNames[$f]]]);
+              array_walk($listArray, 'trim');
+              $nodeArray[$fieldNames[$f]] = $listArray;
+              $logVariationFields .= " Success \n";
+              break;
+
+            case 'geofield':
+              $logVariationFields .= "Importing Geofield Field (" . $fieldNames[$f] . ") :: ";
+              if (!empty(trim($data[$keyIndex[$fieldNames[$f]]]))) {
+                $geoFieldArray = explode(";", trim($data[$keyIndex[$fieldNames[$f]]]));
+                if (count($geoFieldArray) > 0) {
+                  $geoFieldMultiArray = [];
+                  for ($g = 0; $g < count($geoFieldArray); $g++) {
+                    $latlng = explode(",", $geoFieldArray[$g]);
+                    for ($l = 0; $l < count($latlng); $l++) {
+                      $latlng[$l] = floatval($latlng[$l]);
+                    }
+                    array_push($geoFieldMultiArray,
+                    \Drupal::service('geofield.wkt_generator')->WktBuildPoint([trim($latlng[1]), trim($latlng[0])]));
+                  }
+                  $nodeArray[$fieldNames[$f]] = $geoFieldMultiArray;
+                }
+                else {
+                  $latlng = explode(",", trim($data[$keyIndex[$fieldNames[$f]]]));
+                  for ($l = 0; $l < count($latlng); $l++) {
+                    $latlng[$l] = floatval($latlng[$l]);
+                  }
+                  $lonlat = \Drupal::service('geofield.wkt_generator')->WktBuildPoint([trim($latlng[1]), trim($latlng[0])]);
+                  $nodeArray[$fieldNames[$f]] = $lonlat;
+                }
+                $logVariationFields .= " Success \n";
+              }
+              break;
+
+            case 'authored_by':
+              $logVariationFields .= "Importing Content (" . $fieldNames[$f] . ") :: ";
+              $user_id = get_user_id($data[$keyIndex[$fieldNames[$f]]]);
+              $nodeArray['uid'] = ($user_id > 0) ? $user_id : \Drupal::currentUser()->id();
+              $logVariationFields .= " Success \n";
+              break;
+
+            default:
+              $nodeArray[$fieldNames[$f]] = $data[$keyIndex[$fieldNames[$f]]];
+              break;
+          }
+        }
+        $nodeArray['type'] = strtolower($contentType);
+        $nodeArray['promote'] = 0;
+        $nodeArray['sticky'] = 0;
+        if ($nodeArray['title']['value'] != '') {
+          $node = Node::create($nodeArray);
+          $node->save();
+          $logVariationFields .= "********************* Node Imported successfully ********************* \n\n";
+          fwrite($logFile, $logVariationFields);
+        }
+        $nodeArray = [];
+      }
+      fclose($handle);
+      
+      if ($mode != 'cron') {
+        $url = $base_url . "/admin/content";
+        header('Location:' . $url);
+        exit;
+      }
+    }
+  } //die('test');
+}
+/**
+ * To get Node id from state code or city name.
+ * $title, $type
+ * $nid = get_node_id_by_field_value('field_name', 'value', 'article'); 
+ */
+function get_node_id_by_field_value($field_name, $value, $type = '') {
+    $nid = false;
+    if ($field_name != '' && $value != '') {                
+        $query = \Drupal::entityQuery('node');
+        
+        $query->condition($field_name, $value);
+                
+        if ($type != '') {
+            $query->condition('type', $type);
+        }
+        
+        $query->sort('nid', 'DESC');
+        
+        $nids = $query->execute();
+        
+        if (!empty($nids)) {
+            $nid = array_values($nids)[0];
+        }
+    }
+
+    return $nid;
+}
+
+/**
+ * To get Term id from state code or city name.
+ * default voc = countries_state_and_city
+ * for filter by state city code use $field_name = 'field_state_city_code';
+ * get_term_id_by_name_state_code('title', 'countries_state_and_city', 'field_state_city_code', 'parent_id', 'id')
+ */
+function get_term_id_by_name_state_code($name, $voc = '', $field_name = 'name', $parent_id = '', $mode = 'id') {
+    if ($name == '') {
+        return false;
+    }
+    
+    $term = false;
+    $tid = false;
+    if ($name != '') {
+        if ($voc == '') {
+            $voc = 'countries_state_and_city';
+        }
+        
+        //$field_name = 'field_state_city_code';
+        $filter_by_field = $field_name;
+        if ($field_name == '' || $field_name == 'field_city') {
+            $filter_by_field = 'name';
+        }
+        
+        $filter = [$filter_by_field => $name, 'vid' => $voc];
+        //$parent_id = 111;
+        if ($field_name == '' && $parent_id != '') {
+            $filter['parent'] = $parent_id;
+        }
+                
+        $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')
+            ->loadByProperties($filter);
+#echo "Term :: {$name} {$field_name}";exit;
+        if ($field_name == '' && $parent_id != '') {
+            //echo "<pre>Import Term::";print_r($filter);print_r($term);exit;
+        }
+        if (!empty($term)) {
+            $term = reset($term);
+            $tid = $term->id();            
+        } else {
+            if ($field_name == 'field_city' && $parent_id == ''){
+                // for city require parent id, if no parent id then skip create new term
+                return false;
+            }
+            
+            $new_term_arr = [
+              'name' => $name,
+              'vid' => $voc,
+              //'parent' => $parent_id,
+            ];
+            if ($parent_id != '') {
+                $new_term_arr['parent'] = $parent_id;
+            }
+            if ($field_name == 'field_state') {
+                $new_term_arr['field_state_city_code'] = $name;
+            }
+            
+            // Create the taxonomy term.
+            $new_term = Term::create($new_term_arr);
+
+            // Save the taxonomy term.
+            $new_term->save();
+
+            // Return the taxonomy term id.
+            $tid = $new_term->id();
+            $term = reset($new_term);
+            #return $new_term->id();
+        }
+    }
+    
+    if (!$tid == '' || !isset($tid)) {
+        #$tid = $term->id();
+        #$tid = trim($tid);
+        #echo "<br> $tid No tid for name: {$name}, field: $field_name";print_r($term);exit;
+    }
+
+    if ($mode == 'id') {
+        return trim($tid);
+    }
+
+    return $term;
+}
+
+
+// function custom_module_import_agents_callback() {
+//     $contentType = 'agents';
+//     $csvFileName = 'agents.csv';
+//     custom_module_import_content_callback($contentType,$csvFileName);
+// }
+function custom_module_import_agents_callback() {
+    $contentType = 'agents';
+    #$csvFileName = 'agents.csv';
+    $csvFileName = 'Agent Data.csv';
+    $fieldHeader = [
+      'AgentIdentifier' => 'field_agentidentifier',
+      'agentType'       => 'field_agenttype',
+      'agentName'       => 'title',
+      'agentEmail'      => 'field_agentemail',
+      'agentPhone'      => 'field_agentphone',
+      'agentFax'        => 'field_agentfax',
+      'agentMobile'     => 'field_agentmobile'
+    ];
+    custom_module_import_content_callback($contentType,$csvFileName,$fieldHeader);
+}
+
+function custom_module_import_property_callback() {
+    $contentType = 'properties';
+    $csvFileName = 'Property Data.csv';
+    $fieldHeader = [
+        'IDENTIFIER' => 'field_identifier',
+        'NAME'       => 'title',
+        'ADDRESS'    => 'field_property_address',
+        'CITY'       => 'field_city',
+        'STATE'      => 'field_state',
+        'ZIP'        => 'field_zip',
+        'COUNTY'         => 'field_county',
+        'GLA'            => 'field_gla',
+        'PARKING'        => 'field_parking',
+        'OVERVIEW'       => 'field_overview',
+        'LAT'            => 'field_latitude',
+        'LNG'            => 'field_longitude',
+        'YEAR_BUILT'     => 'field_year_built',
+        'YEAR_RENOVATED' => 'field_year_renovated',
+        
+        // paragraph - field_agents
+        'AGENT_1_TITLE'   => 'field_agent_title_1',
+        'AGENT_1_NAME'    => 'field_agent_name_1',
+        'AGENT_2_TITLE'   => 'field_agent_title_2',
+        'AGENT_2_NAME'    => 'field_agent_name_2',
+        'AGENT_3_TITLE'   => 'field_agent_title_3',
+        'AGENT_3_NAME'    => 'field_agent_name_3',
+        'AGENT_4_TITLE'   => 'field_agent_title_4',
+        'AGENT_4_NAME'    => 'field_agent_name_4',
+        
+        'PROPERTY_MANAGER' => 'field_property_manager',
+        'LANDLORD'         => 'field_landlord',
+        'PROPERTY_TYPE'    => 'field_property_type',
+        'Slug'             => 'field_slug',
+        'Fund'             => 'field_fund',
+        'MetaDescription'  => 'field_metadescription',
+        'MSA'              => 'field_msa',
+        'CALLRAIL'         => 'field_callrail',
+        'PC_ID'            => 'field_propertycapsule_id',
+    ];
+    custom_module_import_content_callback($contentType,$csvFileName, $fieldHeader);
+}
+/**
+ * hook_cronapi
+ */
+/*function custom_module_cron() {
+  //\Drupal::logger('custom_module')->notice('custom_module cron');
+  //custom_module_import_content_callback();
+}*/
+
+/**
+ * Save cron logs and send email by webform
+ */
+function send_cron_logs_email ($cron_type = '', $logs = '') {
+    $cron_settings = \Drupal::config('custom_module.cron_settings');//->get('slogan');
+    
+    $webform_id = $cron_settings->get('cron_logs_webform_id');
+    
+    $from_email = $cron_settings->get('from_email');
+    $to_email   = $cron_settings->get('to_email');
+    $subject    = $cron_settings->get('email_subject');
+    
+    /*$logs = "Property Import Function: custom_module_import_content_callback, Start Time: 2021-05-03 15:52:52, End Time: 2021-05-03 15:53:00
+CSV: sites/default/files/csv/Agent Data.csv
+Total: 43
+Failed: 0
+Already exist: 43";*/
+    
+    #echo "<pre>Settings: <br>";print_r($from_email);exit;
+    
+    // Get submission values and data.
+    $values = [
+      'webform_id' => $webform_id,
+      'entity_type' => NULL,
+      'entity_id' => NULL,
+      'in_draft' => FALSE,
+      'uid' => '1',
+      'langcode' => 'en',
+      'token' => 'pgmJREX2l4geg2RGFp0p78Qdfm1ksLxe6IlZ-mN9GZI',
+      'uri' => "/webform/{$webform_id}/api",
+      //'remote_addr' => '',
+      'data' => [
+        'cron_type' => $cron_type,
+        //'from_email' => $from_email,
+        //'to_email' => $to_email,
+        'subject' => "Cron - {$cron_type}",
+        'logs' => $logs,
+      ],
+    ];
+
+    // Check webform is open.
+    $webform = Webform::load($webform_id);
+    $is_open = WebformSubmissionForm::isOpen($webform);
+
+    if ($is_open === TRUE) {
+        /*$webform_submission_id = 70;
+        // Load submission
+        $webform_submission = WebformSubmission::load($webform_submission_id);
+        #$submission_link = $webform_submission->toLink()->toRenderable();
+        $submission_url  = $webform_submission->toUrl()->toString();
+        
+        $handlers = $webform_submission->getWebform()->getHandlers();
+
+        $webform = $webform_submission->getWebform();
+        $handler = $webform->getHandler('email');
+        $message = $handler->getMessage($webform_submission);
+  
+               #$handler = $handlers['email'];
+        kint($submission_url, $message);
+        // Invoke submit form.
+        $form = []; // Might need to get the $form.
+        $form_state = new FormState(); // Might need to be build the form state.
+        #$handler->submitForm($form, $form_state, $webform_submission);
+
+        // Modify submission values
+        #$webform_submission->setElementData('subject', 7);
+        */
+        
+        // Validate submission.
+        $errors = WebformSubmissionForm::validateFormValues($values);
+
+        // Check there are no validation errors.
+        if (empty($errors)) {
+            // Submit values and get submission ID.
+            $webform_submission = WebformSubmissionForm::submitFormValues($values);
+            #print $webform_submission->id();
+        } else {
+            #print_r($errors);
+            $errors = implode('<br>', $errors);
+            $notice_msg = "Cron type: {$cron_type}<br>{$errors}";
+            $logger = \Drupal::logger('custom_module')->notice($notice_msg);
+        }
+    }
+}
+
+function custom_module_import_content_callback($contentType = '', $csvFileName = '', $fieldHeader = '', $customForm = false) {
+    // increase memory limit
+    ini_set('memory_limit', '1024M');
+    #drupal_flush_all_caches();
+    global $base_url;
+        
+    // get cron config:
+    $cron_settings = \Drupal::config('custom_module.cron_settings');
+    $import_limit = ($cron_settings->get('import_limit') == 0)?'':$cron_settings->get('import_limit');
+    $cron_identifier = $cron_settings->get('identifier');
+    $cron_identifier_arr = [];    
+    
+    if (!empty($cron_identifier)) {
+        $cron_identifier_arr = explode(',', $cron_identifier);
+    }
+    
+    $cron_config_limit_or_id = '';
+    if (!empty($import_limit) || !empty($cron_identifier)) {
+        $cron_config_limit_or_id = 'yes';
+    }
+    // cron config end
+    
+    $mode = (isset($_GET['mode']) && $_GET['mode'] == 'web')?'web':'';
+    
+    #$contentType = 'agents';
+                        
+    $fields = get_fields($contentType);
+    $nodeFieldArr = [];
+    
+    if (!empty($fields) && !empty($fields['name'])) {
+        $fieldNames = $fields['name'];
+        $fieldTypes = $fields['type'];
+        $fieldSettings = $fields['setting'];
+
+        foreach ($fieldNames as $key => $value) {
+            $nodeFieldArr[$value] = $fieldTypes[$key];
+        }
+    }
+
+        
+    if (!is_object($csvFileName)) {
+        #$file_path = $csvFileName;
+        #$locatoin = 'temporary://agents_2.csv';
+        $csv_file = "sites/default/files/csv/{$csvFileName}";    
+    } else {
+        $csv_file = $csvFileName->destination;
+    }
+    #echo "Post:$csv_file";exit;
+    $current_time = date('Y-m-d H:i:s');
+    
+    if ($mode == 'web') {
+        echo "*** Import process started at {$current_time} ***<br>";
+        echo "PHPExcel Start CSV: $csv_file<br>";
+    }
+    
+    if ($mode == 'web') {
+        #$target_id = get_node_id_by_field_value('title','Alameda Crossing', 'properties');
+        echo "<pre>$mode - Create node filedata: $contentType<br>";#print_r($fields['name']);print_r($fields['type']);echo "\r\n<br>";#exit;
+        #echo "<br>Node: ";print_r($target_id);exit;
+    }
+    
+    include_once('sites/all/libraries/PHPExcel/Classes/PHPExcel/IOFactory.php');
+    #$library = libraries_load('PHPExcel');
+    $objPHPExcel = new \PHPExcel();
+    
+    $logFileName = "custom_import_logs.html";
+    $logFile = "sites/default/files/logs/{$logFileName}";
+    #$logFile = fopen("sites/default/files/logs/" . $logFileName, "w");
+    
+    $logFileContent = file_get_contents($logFile);
+    $start_time = $current_time = date('Y-m-d H:i:s');
+    $msg_begin = "***************************** Content Import Begins At {$current_time} (file: {$csv_file})************************************";
+    $logs = "$msg_begin <br>";
+    #print_r($nodeFieldArr);exit;
+    
+    $titleField = 'title';
+    $table_tr = array();
+    $table_tr[] = '<table class="custom_log_table"><style>.custom_log_table{width:500px !important;border:1px solid;}.custom_log_table td{text-align: center;}</style>';
+    $table_tr[] = "<tr><th>Title</th><th>Status</th><th>Exists?</th></tr>";
+    #$table_tr[] = "<tr><td colspan='3'>{$msg}</td></tr>";    
+        
+    #$cron_logger = "Import process for file: $csv_file started";
+    
+    $total_records = 0;
+    $success_records = 0;
+    $already_exist_records = 0;
+    $failed_records = 0;
+    
+    $file_not_exist_msg = '';
+    $unPublishedNodeMsg = '';
+    
+    $objPHPExcel = new PHPExcel();
+    if (file_exists($csv_file)){
+        $fields = get_fields($contentType);
+        $fieldNames = $fields['name'];
+        $fieldTypes = $fields['type'];
+        $fieldSettings = $fields['setting'];
+        
+        $reference_field_taxonomy = [
+            'field_state'  => 'countries_state_and_city',
+            'field_city'  => 'countries_state_and_city',
+            'field_county'  => 'county',
+            'field_property_type'  => 'property_type',
+        ];
+        $reference_field_node = [
+            'field_property_manager'  => 'agents',
+        ];
+        
+        $paragrapth_reference_field = [
+            'field_agents'  => [],
+        ];
+                
+        if ($mode == 'web') {
+            echo "*** CSV Exist::\r\n<br>";
+        }
+        //$objPHPExcel = PHPExcel_IOFactory::createReader('Excel2007');
+        //$objPHPExcel = $objPHPExcel->load($csv_file); 
+        
+        $inputFileType = 'CSV';
+        $inputFileName = $csv_file;
+        $objReader = PHPExcel_IOFactory::createReader($inputFileType);
+        $objPHPExcel = $objReader->load($inputFileName);
+        
+        #echo "<pre>Load:";print_r($objPHPExcel);
+        $worksheet = $objPHPExcel->getActiveSheet();
+        $total_rows = $objPHPExcel->setActiveSheetIndex(0)->getHighestDataRow();
+        $total_data = $total_rows - 1;
+        $total_records = $total_data;
+        
+        #echo "<pre>Load:".$total_data;print_r($worksheet->getRowIterator());exit;
+        $csvFields = array();
+        $nodeData = array();
+        $agentIdentifierArr = [];
+        
+        foreach ($worksheet->getRowIterator() as $index=>$row) {
+            $row_no = $row->getRowIndex();
+            
+            $csv_row_no = $row_no - 1;
+            if ($cron_config_limit_or_id != '' && $csv_row_no >= ($import_limit+1)) {
+                break;
+            }
+            
+            if ($mode == 'web') {
+                echo 'Row number: ' . $row_no . "\r\n<br>";
+            }
+            
+            $cellIterator = $row->getCellIterator();
+            $cellIterator->setIterateOnlyExistingCells(false); // Loop all cells, even if it is not set
+            
+            $paragraph_field_agents = [];
+            $prop_city_state = [];
+            #$nodeData = array();
+            $nodeArray = [];
+            $i=0;            
+            foreach ($cellIterator as $key=>$cell) {
+                $cellVal = '';
+                if (!is_null($cell)) {
+                    $cellVal = $cell->getValue();
+                    $fieldName = '';
+                    if ($row->getRowIndex() == 1) {
+                        //$csvFields[] = $cellVal;
+                        if ($cellVal != 1) {
+                            $csvFields[] = $fieldHeader[$cellVal];
+                        }
+                    } else {
+                        if (!isset($csvFields[$i])) {
+                            $i++;
+                            #echo "<br>=> Field not found: {$i} -> {$cellVal}<br>";
+                            continue;
+                        } 
+                        
+                        $fieldName = $csvFields[$i];
+                        
+                        if ($fieldName == 'field_identifier' || $fieldName == 'field_agentidentifier') {
+                            $cellVal = ltrim($cellVal, "0");
+                        }
+                        
+                        $nodeData[$index][$fieldName] = $cellVal;
+                        
+                        $agent_title = strpos($fieldName,'field_agent_title_');
+                        $agent_name  = strpos($fieldName,'field_agent_name_');
+                        if ($agent_title !== false || $agent_name !== false) {
+                            $agent_field = '';
+                            if ($agent_title !== false) {
+                                $agent_field = 'field_agent_title';
+                                $no = str_replace('field_agent_title_','',$fieldName);                                
+                            } else if ($agent_name !== false) {
+                                $agent_field = 'field_agent_name';
+                                $no = str_replace('field_agent_name_','',$fieldName);
+                            }
+                            $paragraph_field_agents[$no][$agent_field] = $cellVal;
+                            #echo "====>>>> FIELD NAME: {$fieldName}<br>";
+                            $i++;
+                            continue;
+                        }
+                        
+                        $fieldType = isset($nodeFieldArr[$fieldName])?$nodeFieldArr[$fieldName]:'';
+                        if ($fieldName == 'title') {
+                            $fieldType = 'text';
+                        } else if($fieldName == 'field_overview') {
+                            $fieldType = 'text_long';
+                        }
+                        
+                        switch ($fieldType) {
+                            case 'image':
+                                // Create file object from remote URL.
+                                #$data = file_get_contents('https://www.drupal.org/files/druplicon.small_.png');
+                                #$file = file_save_data($data, 'public://druplicon.png', FILE_EXISTS_REPLACE);
+                                /*
+                                $nodeArray[$fieldName] = [
+                                    'target_id' => $file->id(),
+                                    //'alt' => 'Hello world',
+                                    //'title' => 'Goodbye world'
+                                ];*/
+                                break;
+
+                            case 'entity_reference':
+                                $target_id = 0;
+                                
+                                $tax_voc = '';
+                                if (isset($reference_field_taxonomy[$fieldName])) {
+                                    $tax_voc = $reference_field_taxonomy[$fieldName];
+                                }
+                                
+                                $refNodeType = '';
+                                if (isset($reference_field_node[$fieldName])) {
+                                    $refNodeType = $reference_field_node[$fieldName];
+                                }                                
+                                
+                                $target_id = '';
+                                
+                                $prop_city_state[$fieldName] = $cellVal;
+                                if ($fieldName == 'field_state' || $fieldName == 'field_city') {
+                                    $filter_by_field = 'field_city';
+                                    if ($fieldName == 'field_state') {
+                                        $filter_by_field = 'field_state_city_code';
+                                        $target_id = get_term_id_by_name_state_code($cellVal, $tax_voc, $filter_by_field);
+                                    }
+                                    //$target_id = get_term_id_by_name_state_code($cellVal, $tax_voc, $filter_by_field);
+                                } else if ($fieldName == 'field_county' || $fieldName == 'field_property_type') {
+                                    $target_id = get_term_id_by_name_state_code($cellVal, $tax_voc);
+                                } else if ($fieldName == 'field_property_manager') {
+                                    $target_id = get_node_id_by_field_value('title',$cellVal, $refNodeType);
+                                }
+                                
+                                if ($target_id != 0 && $target_id != '') {
+                                    #$nodeArray[$fieldName] = ["target_id" => $target_id];
+                                    $nodeArray[$fieldName] = $target_id;
+                                }
+                                break;
+                            case 'entity_reference_revisions':
+                                break;
+                            case 'text':
+                                $nodeArray[$fieldName] = $cellVal;
+                                break;  
+                            case 'text_long':
+                                $nodeArray[$fieldName] = [
+                                  'value' => $cellVal,
+                                  'format' => 'full_html',
+                                ];
+                                break;                            
+                            case 'text_with_summary':
+                                $nodeArray[$fieldName] = [
+                                  'summary' => substr(strip_tags($cellVal), 0, 100),
+                                  'value' => $cellVal,
+                                  'format' => 'full_html',
+                                ];
+
+                                break;
+
+                            case 'datetime':
+                                break;
+                            
+                            case 'yearonly':
+                            case 'timestamp':
+                                #$nodeArray[$fieldName] = ["value" => $cellVal];
+                                $nodeArray[$fieldName] = $cellVal;
+                                break;
+                            case 'boolean':
+                                break;
+
+                            case 'langcode':
+                                break;
+
+                            case 'geolocation':
+                                break;
+
+                            case 'list_string':
+                                $nodeArray[$fieldName] = $cellVal;
+                                break;
+
+                            case 'geofield':
+                                break;
+
+                            case 'authored_by':
+                                break;
+                            default:
+                                $nodeArray[$fieldName] = $cellVal;
+                                break;
+                        }
+                        
+                    }
+                    
+                    if ($mode == 'web') {
+                        #echo "Cell: " . $cell->getCoordinate() . " - {$fieldName}: " . $cell->getValue() . "\r\n<br>";
+                    }
+                    
+                    $i++;
+                }
+            }
+            
+            if ($row_no > 1) {
+                if ($mode == 'web') {
+                    #echo "<br>CSV Fields::";print_r($csvFields);print_r($nodeArray);#print_r($paragraph_field_agents);
+                    #echo "<br>CSV Fields::";print_r($nodeArray);
+                    #exit;
+                }
+            }
+                        
+            
+            if (!empty($nodeArray)) {                
+                $nodeArray['langcode'] = 'en';
+                $nodeArray['type'] = strtolower($contentType);
+                $nodeArray['status'] = 1;
+                $nodeArray['promote'] = 0;
+                $nodeArray['sticky'] = 0;
+                $nodeArray['uid'] = 1;
+                                
+                #$node_title = $nodeArray['title']['value'];
+                $node_title = isset($nodeArray['title'])?$nodeArray['title']:'';
+                $identifier_field_name = '';
+                if ($contentType == 'agents') {
+                    $identifier_field_name = 'field_agentidentifier';
+                    if (isset($nodeArray[$identifier_field_name]) && $nodeArray[$identifier_field_name] != '') {
+                        $identifierArr[] = $nodeArray[$identifier_field_name];
+                    }
+                } else if ($contentType == 'properties') {
+                    $identifier_field_name = 'field_identifier';
+                    if (isset($nodeArray[$identifier_field_name]) && $nodeArray[$identifier_field_name] != '') {
+                        $identifierArr[] = $nodeArray[$identifier_field_name];
+                    }
+                    
+                    // check city added or not
+                    $field_city = 'field_city';
+                    $tax_voc = '';
+                    if (isset($reference_field_taxonomy[$field_city])) {
+                        $tax_voc = $reference_field_taxonomy[$field_city];
+                    }
+                    
+                    if (isset($nodeArray['field_state']) && !isset($nodeArray[$field_city]) && isset($prop_city_state[$field_city])) {
+                        $tax_voc = '';
+                        if (isset($reference_field_taxonomy[$field_city])) {
+                            $tax_voc = $reference_field_taxonomy[$field_city];
+                        }
+                        
+                        #echo "#=> Prop node data: $tax_voc<br>";print_r($prop_city_state);echo "<br>NODE Arr:: ";print_r($nodeArray);exit;
+                        #echo "{$prop_city_state[$field_city]} - {$field_city} - {$tax_voc}";exit;
+                        $nodeArray[$field_city] = get_term_id_by_name_state_code($prop_city_state[$field_city], $tax_voc, '', $nodeArray['field_state']);
+                    }
+                }
+                
+                #echo "<br>Node::";print_r($nodeArray);
+                #echo "<br>Exit;";exit;
+                
+                $identifier = '';
+                if (isset($nodeArray[$identifier_field_name])) {
+                    $identifier = $nodeArray[$identifier_field_name];
+                }
+                
+                // from custom config - if identifier not match then skip this loop index and if match then proceed
+                if (!empty($cron_identifier_arr) && !in_array($identifier, $cron_identifier_arr)) {
+                    continue;
+                }
+                
+                #echo "Agent:: <pre>";print_r($nodeArray);exit;
+                if ($identifier != '') {                    
+                    // check if node already exist for given title
+                    $nid = get_node_id_by_field_value($identifier_field_name, $identifier, $contentType);
+                    $node_with_identifier_exist = (!empty($nid))?true:false;
+                    
+                    $node_exist = 'No';
+                    if ($node_with_identifier_exist) {
+                        $node_exist = '<b>Yes</b>';
+                    }
+                    #echo "node exist {$nid}: {$node_with_identifier_exist}";
+                    #echo "<pre>Node exist for title '{$node_title}':";print_r($nids);exit;
+                                      
+                    try {
+                        if ($node_with_identifier_exist) {
+                            $node_exist = '<b>Yes</b>';
+                            $saved_failed = '';
+                            $already_exist_records++;
+                            $node = Node::load($nid);
+                            if ($node && !empty($nodeArray)) {
+                                foreach ($nodeArray as $field => $values) {
+                                    $node->set($field, $values);
+                                }
+                                $node->save();
+                            }
+                            
+                            #echo "<pre>Node load::";print_r($node->id());#exit;
+                            #$node->setTitle('NEW TITLE'); // This is a special meta field
+                            #$node->set('field_year_built', $nodeArray['field_year_built']); // This is a Field added in to the content type
+                             
+                            if ($mode == 'web') {
+                                echo "****** Node update:: {$nid}\r\n<br>";
+                            }
+                        } else {
+                            $node = Node::create($nodeArray);
+                            $node->save();  
+                            $nid = $node->id();
+                            $saved_failed = 'Saved';
+                            
+                            #echo "***NID: {$nid}";exit;
+                        }       
+                        
+                        // create paragraph items
+                        if ($node && !empty($paragraph_field_agents)) {
+                            $agents_paragraph = [];
+                            foreach ($paragraph_field_agents as $key => $field_arr) {
+                                #echo "::>";print_r($field_arr);
+                                $paragraph = custom_module_create_paragraph($nid, 'field_agents', 'property_agents', $field_arr);
+                                $agents_paragraph[] = array(
+                                    'target_id' => $paragraph->id(),
+                                    'target_revision_id' => $paragraph->getRevisionId(),
+                                  );
+                            }
+                            #echo "<br>Agent Paragraph::";print_r($agents_paragraph);exit;
+                            if (!empty($agents_paragraph)) {
+                                #$nid = $node->id();
+                                #$node = Node::load($nid);
+                                #$nodeArray['field_agents'] = $agents_paragraph;
+                                $node->set('field_agents', $agents_paragraph);
+                                $node->save();
+                            }
+                        }
+                        // create paragraph items end
+                        
+                        #echo "<br>******Node save:: ";exit;
+                        $success_records++;                        
+                                                
+                        $logs .= "=> Title: '{$node_title}' - processed (Already Exist: {$node_exist})\r\n<br>"; 
+
+                        if ($mode == 'web') {
+                            echo "=> Title: '{$node_title}' - processed (Already Exist: {$node_exist})\r\n<br>";
+                        }
+                    } catch (Exception $exc) {
+                        #echo $exc->getTraceAsString();
+                        $failed_records++;
+                        $saved_failed = 'Failed';
+                        
+                        $logs .= "=> Title: '{$node_title}' - ERROR to save <br>";                         
+                        if ($mode == 'web') {
+                            echo "=> Title: '{$node_title}' - ERROR to save<br>";
+                        }
+                    }  
+                    
+                    $table_tr[] = "<tr><td>{$node_title}</td><td>{$saved_failed}</td><td>{$node_exist}</td></tr>";
+                }
+            }
+        }
+                
+        // check if any agents/properties removed from scv and present in db then unpublshed it
+        #$identifierArr = [];
+        if (!empty($identifierArr) && ($cron_config_limit_or_id == '')) {
+            if ($contentType == 'agents') {
+                $nodeList = get_agent_list($identifierArr);
+            } else {
+                $nodeList = get_property_list($identifierArr);
+            }
+            #echo "<pre>Agents Arr: ";print_r($agentsList);
+            #echo "<br>unPublished Arr:: ";print_r($agentIdentifierArr);
+            #exit;
+            
+            $unPublishedNodes = [];
+            $unPublishedNodesIdentifier = [];
+            if (!empty($nodeList)) {
+                foreach ($nodeList as $key => $nodeData) {
+                    $nid        = $nodeData->id();
+                    $title      = $nodeData->getTitle();
+                    
+                    if ($contentType == 'agents') {
+                        $identifier = $nodeData->get('field_agentidentifier')->value;
+                    } else {
+                        $identifier = $nodeData->get('field_identifier')->value;
+                    }
+                    
+
+                    if (!in_array($identifier, $identifierArr)) {
+                        $unPublishedNodesIdentifier[] = $identifier;
+                        $unPublishedNodes[$identifier]['nid'] = $nid;
+                        $unPublishedNodes[$identifier]['title'] = $title;
+                        
+                        if ($nid != '') {
+                            $node = Node::load($nid);
+                            // Unpublish nodes
+                            $node->setPublished(0);
+                            // Publish nodes
+                            // $node->setPublished(true);
+                            $node->save();
+                        }
+                    }
+                }
+            }
+            
+            if (!empty($unPublishedNodes)) {
+                $unPublishedNodesIdentifierStr = implode(', ', $unPublishedNodesIdentifier);
+                $unPublishedNodesCnt = count($unPublishedNodes);
+                $unPublishedNodesJson = json_encode($unPublishedNodes);
+                #$unPublishedNodeMsg = "Un Published Contents {$unPublishedNodesCnt} (Removed from CSV) - {$unPublishedNodesJson}<br>";
+                $unPublishedNodeMsg = "Unpublished Contents: {$unPublishedNodesCnt}, Identifier: {$unPublishedNodesIdentifierStr}";
+            }
+            
+            if ($mode == 'web') {
+                echo "<br>Un Published {$contentType}::";print_r($unPublishedNodes);
+            }
+            
+        }
+        
+        if ($mode == 'web') {
+            #echo "<br>CSV Fields::";print_r($csvFields);
+            #echo "<br>CSV Fields Value::";print_r($nodeData);
+        }
+        #fwrite($logFile, $logVariationFields);
+    } else {
+        $file_not_exist_msg = "<br><b>***</b>Import process failed. {$csv_file} <b>File not found.</b><br>";
+    }
+            
+    $end_time = date('Y-m-d H:i:s');
+    $msg = "***************************** Node Import process completed at {$end_time} *****************************<br><br>";
+    
+    //$table_tr[] = "<tr><td colspan='3'>{$msg}</td></tr>";    
+    $table_tr[] = '</table>';    
+    $cnt_msg = "<br><strong>Total:</strong> {$total_records}, <strong>Failed:</strong> {$failed_records}, <strong>Updated:</strong> {$already_exist_records}<br>";
+    $table = $msg_begin.$file_not_exist_msg.$cnt_msg.implode('', $table_tr).$msg;
+    
+    #$logsAll = $logs.$logFileContent;
+    $logsAll = $table.$logFileContent;
+    file_put_contents($logFile, $logsAll);    
+        
+    $response = false;
+    
+    $logger_msg = "<strong>{$contentType} Import</strong> Function: custom_module_import_content_callback, Start Time: {$current_time}, End Time: {$end_time}";
+    /*$cron_table_tr = array();
+    $cron_table_tr[] = '<table class="custom_log_table">';
+    $cron_table_tr[] = "<tr><th>File</th><th>Total Records</th><th>Success</th><th>Fail</th><th>Start Time</th><th>End Time</th></tr>";
+    $cron_table_tr[] = "<tr><td>{$csv_file}</td><td>{$total_records}</td><td>{$success_records}</td><td>{$failed_records}</td><td>{$start_time}</td><td>{$end_time}</td></tr>";
+    $cron_table_tr[] = '</table>';
+    $cron_table = $logger_msg.implode('', $cron_table_tr);*/
+    
+    $cron_table = "CSV: {$csv_file}<br>Total: {$total_records}<br>Failed: {$failed_records}<br><strong>Updated:</strong> {$already_exist_records}{$file_not_exist_msg}";
+    $notice_msg = "{$logger_msg}<br>{$cron_table}";
+    $logger = \Drupal::logger('custom_module')->notice($notice_msg);
+        
+    // save logs and send email
+    $cron_type = $contentType;
+    if ($contentType == 'properties') {
+        $cron_type = 'property';
+    }
+    #$logs_msg = "Import process for '{$contentType}' completed successfully.<br><strong>LOGS:</strong> {$cnt_msg}";
+    $logs_msg = "Import process for '{$cron_type}' completed successfully.
+LOGS:
+CSV: {$csv_file}
+Total: {$total_records}
+Failed: {$failed_records}
+Updated: {$already_exist_records}
+{$unPublishedNodeMsg}";
+    send_cron_logs_email($cron_type, $logs_msg);
+    // save logs and send email end
+    
+    if ($mode == 'web') {
+        #echo implode('', $table_tr);
+        echo "*** Import process completed at {$end_time} ***";
+        exit;
+    }
+    
+    if ($customForm) {
+        $response = "Import process for '{$contentType}' completed successfully. LOGS: {$cnt_msg}";
+        #return $response;
+        \Drupal::messenger()->addStatus(t($response));
+        
+        $url = $base_url . "/admin/content";
+        header('Location:' . $url);
+        exit;
+    } else {
+        return true;
+    }
+}
+
+/**
+ * Create a New Paragraph and attach it to it's node
+ * @param int $nid
+ *  The node id this paragraph should be attached to
+ * @param text $node_paragraph_field
+ *  The node field this paragraph should be attached to
+ * @param int $paragraph_type
+ *  The paragraph type
+ * @param $field_arr
+ *  The paragraph fields and values
+ * 
+ */
+function custom_module_create_paragraph($nid, $node_paragraph_field, $paragraph_type, $field_arr) {
+    if ($nid == '' || $node_paragraph_field == '' || $paragraph_type == '' || empty($field_arr)) {
+        return false;
+    }
+    $mode = (isset($_GET['mode']) && $_GET['mode'] == 'web')?'web':'';
+    
+    $node = entity_load('node', $nid);    
+    
+    if (!empty($field_arr)) {
+        $paragraph = Paragraph::create(['type' => $paragraph_type,]);
+        foreach ($field_arr as $field_name => $value) {
+            if ($field_name == 'field_agent_name' && $value != '') {
+                $target_id = get_node_id_by_field_value('title', $value, 'agents');
+                
+                if ($target_id) {
+                    $paragraph->set($field_name, $target_id); 
+                }
+            } else if ($field_name == 'field_uniquefilename' && $value != '') {
+                $excel_file_name = strtolower($value);
+                $document_path = "public://property/documents/";
+                $file_uri = "{$document_path}{$value}";
+                $file_url = file_create_url($file_uri);
+                #$file_url = Url::fromUri($file_uri);//->toString();
+                #$file_url = $file_url->toString();
+                #$file_url = Url::fromUserInput($file_uri);
+                $file_exists = 'No';
+                #$file_search = "sites/default/files/property/documents/{$value}";
+                
+                if (file_exists($file_uri)) {
+                    
+                    if (!file_exists($file_uri) && isset($dir_files_arr[$excel_file_name])) {
+                        $file_uri = $document_path.$dir_files_arr[$excel_file_name];
+                    }
+                    $file_exists = 'Yes';
+                    
+                    // check if file already added or create new file
+                    $fid = add_file_and_get_fid($file_uri);
+                    
+                    /*if (!$fid || $fid == '') {
+                        $file = File::Create([
+                            'uri' => $file_uri,
+                        ]);
+                        $file->save();
+                        
+                        $fid = $file->id();
+                    }*/
+                                        
+                    $paragraph->set($field_name, $fid); 
+                }
+                
+                if ($mode == 'web') {
+                    echo "=> File exists: {$file_exists}, name: {$value}<br>";#exit;
+                }
+                
+            } else {
+                $paragraph->set($field_name, $value); 
+            }
+            
+        }
+        
+        #$paragraph->set('field_agent_title', $field_val['field_agent_title']); 
+        #$paragraph->set('field_agent_name',  $field_val['field_agent_name']); 
+
+        /*if ($fid) {
+          $file = file_load($fid);
+          $paragraph->set('IMAGE_FIELD_NAME', $file);
+        }*/
+
+        $paragraph->isNew();
+        $paragraph->save();	
+        
+        return $paragraph;
+    }
+
+    // Grab any existing paragraphs from the node, and add this one 
+    /*$current = $node->get($node_paragraph_field)->getValue();
+    $current[] = array(
+        'target_id' => $paragraph->id(),
+        'target_revision_id' => $paragraph->getRevisionId(),
+      );
+    $node->set($node_paragraph_field, $current);
+    $node->save();
+    */
+    return true;
+}
+
+/**
+ * get fid from given file uri
+ */
+function add_file_and_get_fid($file_uri = '', $mode = 'fid') {
+    $fid  = '';
+    $file = '';
+    if ($file_uri != '') {
+        $files = \Drupal::entityTypeManager()
+          ->getStorage('file')
+          ->loadByProperties(['uri' => $file_uri]);
+        $file = reset($files);
+        
+        if ($file) {
+            $fid = $file->id();
+        } else {
+            $file = File::Create([
+                'uri' => $file_uri,
+            ]);
+            $file->save();
+
+            $fid = $file->id();
+        }
+    }
+    
+    #echo "<pre>\n FID:{$fid}, $file_uri\n";print_r($file);exit;
+    
+    if ($mode != 'fid') {
+        return $file;
+    }
+    
+    return $fid;
+}
+
+/**
+ * get property list
+ */
+function get_property_list ($identifier_not_in = array(), $field_val = '', $field_name = '') {
+    $query = \Drupal::entityQuery('node')
+	->condition('type', 'properties')
+        ->condition('status', 1);
+	//->condition('field_identifier', 42);
+    
+    if (!empty($identifier_not_in)) {
+	$query->condition('field_identifier', $identifier_not_in, 'NOT IN');
+    }
+    
+    if ($field_name != '') {
+        $field_val_arr = [];
+        if ($field_val != '') {
+            $field_val_arr = explode(',', $field_val);
+        }
+        
+        if (!empty($field_val_arr)) {
+            $query->condition($field_name, $field_val, 'IN');
+        } else {
+            $query->condition($field_name, $field_val);
+        }
+    }
+    
+    $nids = $query->execute();
+    
+    $nodes = false;
+    if (!empty($nids)) {
+        #$nid = array_values($nids)[0];
+        $node_storage = \Drupal::entityTypeManager()->getStorage('node');
+        $nodes = $node_storage->loadMultiple($nids);
+    }    
+
+    return $nodes;
+    /*foreach ($nodes as $n) {
+        $title = $n->title->value;            // "Lorem Ipsum..."
+
+        // do whatever you would do with a node object (set fields, save, etc.)
+        $n->set('title', "this is a test");
+        $n->save();
+    }*/
+}
+
+/**
+ * get property list
+ */
+function get_agent_list ($identifier_not_in = array(), $field_val = '', $field_name = '') {
+    $query = \Drupal::entityQuery('node')
+	->condition('type', 'agents')
+        ->condition('status', 1);
+    
+    if (!empty($identifier_not_in)) {
+	$query->condition('field_agentidentifier', $identifier_not_in, 'NOT IN');
+    }
+    
+    if ($field_name != '') {
+        $query->condition($field_name, $field_val);
+    }
+    
+    $nids = $query->execute();
+    #echo "<br>Not IN::";print_r($nid_not_in);print_r($nids);exit;
+    $nodes = false;
+    if (!empty($nids)) {
+        #$nid = array_values($nids)[0];
+        $node_storage = \Drupal::entityTypeManager()->getStorage('node');
+        $nodes = $node_storage->loadMultiple($nids);
+    }    
+
+    return $nodes;
+    /*foreach ($nodes as $n) {
+        $title = $n->title->value;            // "Lorem Ipsum..."
+
+        // do whatever you would do with a node object (set fields, save, etc.)
+        $n->set('title', "this is a test");
+        $n->save();
+    }*/
+}
+
+/**
+ * Property space data import cron call back
+ * Paragraph type - property_space_available
+ */
+function custom_module_import_property_space_data_callback() {
+    $paragraph_node_field = 'field_space_available';
+    $csvFileName = 'Space Data.csv';
+    $fieldHeader = [
+        'Identifier'        => 'field_identifier',
+        'Space_Number'      => 'field_space_number',
+        'SQFT'              => 'field_sqft',
+        'Tenant'            => 'field_tenant',
+        'Lease_Expiration'  => 'field_lease_expiration',
+        'Anchor'            => 'field_anchor',
+        'Coming_Available'  => 'field_coming_available',
+        'priorttype'        => 'field_priorttype',
+        '360_tour'           => 'field_360_tour',
+    ];
+    custom_module_import_paragraph_content_callback($paragraph_node_field, $csvFileName, $fieldHeader);
+}
+
+/**
+ * Property Demographics data import cron call back
+ * Paragraph type - property_demos
+ */
+function custom_module_import_property_demos_data_callback() {
+    $paragraph_node_field = 'field_property_demos';
+    $csvFileName = 'Demos.csv';
+    $fieldHeader = [
+        'Identifier'        => 'field_identifier',
+        'Distance'          => 'field_distance',
+        'Population'        => 'field_population',
+        'DaytimePopulation' => 'field_daytimepopulation',
+        'Household'         => 'field_household',
+        'MedianIncome'      => 'field_medianincome',
+    ];
+    custom_module_import_paragraph_content_callback($paragraph_node_field, $csvFileName, $fieldHeader);
+}
+
+/**
+ * Property Documents import cron call back
+ * Paragraph type - property_document
+ */
+function custom_module_import_property_documents_data_callback() {
+    $paragraph_node_field = 'field_documents';
+    $csvFileName = 'Documents Index.csv';
+    $fieldHeader = [
+        'entitynumber'   => 'field_identifier',
+        'Uniquefilename' => 'field_uniquefilename',
+        'Priority'       => 'field_priority',
+        'textdisplay'    => 'field_textdisplay',
+    ];
+    
+    /*$file_uri = 'public://property/documents/Alameda_Crossing_Avondale_AZ_Unit_MAJ4A_LOD.pdf';
+    $fid = add_file_and_get_fid($file_uri);    
+    
+    if (!$fid) {
+        echo "No";
+    } else {
+        echo "Yes";
+    }
+    
+    echo "File data: $file_uri\r\n";var_dump($fid);exit;*/
+    
+    custom_module_import_paragraph_content_callback($paragraph_node_field, $csvFileName, $fieldHeader);
+}
+
+/**
+ * Property Demographics data import cron call back
+ * Paragraph type - property_document
+ */
+function custom_module_import_property_images_callback() {
+    $paragraph_node_field = 'field_property_image';
+    $csvFileName = 'Image Index.csv';
+    $fieldHeader = [
+        'entitynumber'     => 'field_identifier',
+        'Header/Heroimage' => 'field_property_image',
+        'Imagepriority'    => 'Imagepriority',
+        'AltText'          => 'AltText',
+    ];
+    custom_module_import_paragraph_content_callback($paragraph_node_field, $csvFileName, $fieldHeader);
+}
+
+/**
+ * Property related data import process
+ */
+function custom_module_import_paragraph_content_callback ($paragraph_node_field = '', $csvFileName = '', $fieldHeader = '') {
+    global $base_url;
+    $current_time = date('Y-m-d H:i:s');
+    
+    // increase memory limit
+    ini_set('memory_limit', '1024M');
+    $phpinfo = (isset($_GET['phpinfo']) && $_GET['phpinfo'] != '')?'phpinfo':'';
+    
+    if ($phpinfo != '') {
+        echo "Print PHP INFO<br>";
+        phpinfo();exit;
+    }
+        
+    if ($paragraph_node_field == '' || $csvFileName == '' || empty($fieldHeader)) {
+        return false;
+    }
+        
+    $mode = (isset($_GET['mode']) && $_GET['mode'] == 'web')?'web':'';
+    
+    // get cron config:
+    $cron_settings = \Drupal::config('custom_module.cron_settings');
+    $import_limit = ($cron_settings->get('import_limit') == 0)?'':$cron_settings->get('import_limit');
+    $cron_identifier = $cron_settings->get('identifier');
+    $cron_identifier_arr = [];    
+    
+    if (!empty($cron_identifier)) {
+        $cron_identifier_arr = explode(',', $cron_identifier);
+    }
+    
+    $cron_config_limit_or_id = '';
+    if (!empty($import_limit) || !empty($cron_identifier)) {
+        $cron_config_limit_or_id = 'yes';
+    }
+    // cron config end
+    
+    $pidentifier = (isset($_GET['pidentifier']) && $_GET['pidentifier'] != '')?$_GET['pidentifier']:$cron_identifier;
+    
+    $error_msg = '';
+    $msg = "<br>*** Import process started at {$current_time} ***<br>";
+    $logs = $msg;
+    $logs .= "### Field: {$paragraph_node_field}, CSV File: {$csvFileName} ###<br>";
+    
+    if ($mode == 'web') {
+        echo "{$logs}<pre>";
+        print_r($fieldHeader);
+        echo "<br>";
+    }
+        
+    if ($pidentifier != '') {
+        $identifier_not_in = [];
+        $property_list = get_property_list($identifier_not_in, $pidentifier, 'field_identifier');
+    } else {
+        $property_list = get_property_list();
+    }
+    
+    $prop_cnt = (is_array($property_list))?count($property_list):0;
+    
+    $msg = "* Property count: {$prop_cnt}<br>";
+    $logs .= $msg;
+    if ($mode == 'web') {
+        echo $msg;
+        #print_r($property_list);exit;
+    }
+    
+    $paragraph_machine_name = '';
+    $cron_type = '';
+    if ($paragraph_node_field == 'field_space_available') {
+        $paragraph_machine_name = $cron_type = 'property_space_available';
+    } else if ($paragraph_node_field == 'field_documents') {
+        $paragraph_machine_name = 'property_document';
+        $cron_type = 'property_documents';
+    } else if ($paragraph_node_field == 'field_property_demos') {
+        $paragraph_machine_name = 'property_demos';
+        $cron_type = 'property_demos';
+    } else if ($paragraph_node_field == 'field_property_image') {
+        $paragraph_machine_name = '';
+        $cron_type = 'property_images';
+    }
+    
+    $dir_files_arr = [];
+    $dir_files_arr_cnt = 0;
+    if ($cron_type == 'property_documents' || $cron_type == 'property_images') {
+        $document_path = 'public://property/documents/';
+        if ($cron_type == 'property_images') {
+            $document_path = 'public://property/images/';
+        }
+        
+        $scan = scandir($document_path);
+        foreach($scan as $file) {
+           if (!is_dir("{$document_path}$file") && $file != "." && $file != "..") {
+                $dir_files_arr[strtolower($file)] = $file;
+                #echo "<br>File:: ".$file.'\n';
+           }
+        }
+        $dir_files_arr_cnt = count($dir_files_arr);
+        #echo "<br>{$document_path} ({$dir_files_arr_cnt}):: ";print_r($dir_files_arr);echo "<br>";exit;
+    }
+    
+    $total_records = 0;
+    $imported = 0;
+    $import_failed = 0;
+    $remove_data_arr = [];
+    if ($property_list && is_array($property_list)) {
+        $csv_file = "sites/default/files/csv/{$csvFileName}";
+        
+        $file_not_exist_msg = '';
+        
+        include_once('sites/all/libraries/PHPExcel/Classes/PHPExcel/IOFactory.php');
+        
+        $objPHPExcel = new PHPExcel();
+        if (file_exists($csv_file)){        
+            $inputFileType = 'CSV';
+            $inputFileName = $csv_file;
+            $objReader = PHPExcel_IOFactory::createReader($inputFileType);
+            $objPHPExcel = $objReader->load($inputFileName);
+
+            #echo "<pre>Load:";print_r($objPHPExcel);
+            $worksheet = $objPHPExcel->getActiveSheet();
+            $total_rows = $objPHPExcel->setActiveSheetIndex(0)->getHighestDataRow();
+            $total_data = $total_rows - 1;
+            $total_records = $total_data;
+            
+            $msg = "#=> CSV data: {$total_records}<br>\n";
+            $logs .= $msg;
+            if ($mode == 'web') {
+                echo $msg;
+            }
+            
+            #echo "<pre>Load:".$total_data;print_r($worksheet->getRowIterator());exit;
+            $csvFields = array();
+            $nodeData = array();
+            $paragraphCsvData = array();
+            $textdisplay = [];            
+            foreach ($worksheet->getRowIterator() as $index=>$row) {
+                $row_no = $row->getRowIndex();
+
+                if ($mode == 'web') {
+                    #echo 'Row number: ' . $row_no . "\r\n<br>";
+                }
+
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false); // Loop all cells, even if it is not set
+                
+                $identifier = '';
+                $nodeArr = array();
+                $csvRowData = array();
+                $i=0;            
+                foreach ($cellIterator as $key=>$cell) {
+                    $cellVal = '';
+                    if (!is_null($cell)) {
+                        $cellVal = $cell->getValue();
+                        if ($row->getRowIndex() == 1) {
+                            //$csvFields[] = $cellVal;
+                            if ($cellVal != 1 && isset($fieldHeader[$cellVal])) {
+                                $csvFields[] = $fieldHeader[$cellVal];
+                            }
+                        } else {
+                            if (!isset($csvFields[$i])) {
+                                continue;
+                            }
+                            
+                            $fieldName = $csvFields[$i];
+                            if ($fieldName == 'field_identifier' || $fieldName == 'Imagepriority') {
+                                $cellVal = ltrim($cellVal, "0");
+                                if ($fieldName == 'field_identifier') {
+                                    $identifier = $cellVal;
+                                    #echo "Cell Val: {$identifier} ";var_dump($identifier);exit;
+                                }
+                            }
+                            
+                            if ($fieldName == 'field_lease_expiration' && $cellVal != '') {
+                                $cellVal = date("Y-m-d", strtotime($cellVal));
+                            }
+                            
+                            if ($fieldName == 'field_priorttype' && $cellVal != '') {
+                                $target_id = get_term_id_by_name_state_code($cellVal, 'use_type');
+                                $cellVal   = $target_id;
+                            }
+                            
+                            if ($fieldName == 'field_textdisplay') {
+                                $textdisplay[$cellVal] = $cellVal;
+                            }
+                            
+                            $nodeData[$index][$fieldName] = $cellVal;
+                            
+                            $csvRowData[$fieldName] = $cellVal;
+                        }
+
+                        if ($mode == 'web') {
+                            #echo 'Cell: ' . $cell->getCoordinate() . ' - ' . $cell->getValue() . "\r\n<br>";
+                        }
+
+                        $i++;
+                    }
+                }
+                
+                /*if (!empty($csvRowData) && $paragraph_node_field == 'field_property_image') {
+                    #echo "<br>Image priority<br>";
+                    $Imagepriority = isset($csvRowData['Imagepriority'])?$csvRowData['Imagepriority']:'';
+                    $paragraphCsvData[$identifier][$Imagepriority] = $csvRowData; // issue for multi images have same priority
+                } else if (!empty($csvRowData)) {
+                    $paragraphCsvData[$identifier][] = $csvRowData;
+                }*/
+                if (!empty($csvRowData)) {
+                    
+                    // set field_coming_available = 1 if tenant is null/blank
+                    if ($paragraph_node_field == 'field_space_available' && ($csvRowData['field_tenant'] == NULL || empty($csvRowData['field_tenant']))) {
+                        if ($csvRowData['field_coming_available'] != 1) {
+                            $csvRowData['field_coming_available'] = 1;
+                        }                    
+                    }
+                    
+                    if ($mode == 'web') {
+                        #echo "<pre>Fields: ";print_r($csvRowData);echo "</pre>";#exit;
+                    }
+                    
+                    $paragraphCsvData[$identifier][] = $csvRowData;
+                }
+            }
+        } else {
+            $file_not_exist_msg = "<br><b>***</b>Import process failed. {$csv_file} <b>File not found.</b><br>\n";
+        }
+        
+        if ($mode == 'web') {            
+            $paragraphCsvDataPrint = $paragraphCsvData;
+            if ($pidentifier != '') {
+                $paragraphCsvDataPrint = $paragraphCsvData[$pidentifier];
+            }
+            #echo "<pre>CSV Data::<br>";print_r($paragraphCsvDataPrint);echo "<br>";
+            #exit;
+            sort($textdisplay);
+            $textDsiplayOptions = implode($textdisplay,'<br>');
+            echo "=> Textdisplay: ".count($textdisplay)."<br>";#echo "<br>{$textDsiplayOptions}<br>---------------<br>";#print_r($textdisplay);exit;
+        }
+    
+        $i = 0;
+        foreach ($property_list as $key => $node) {
+            $nid        = $node->id();
+            $title      = $node->getTitle();
+            $identifier = $node->get('field_identifier')->value;
+            $i++;
+            
+            // cron config
+            if ($cron_config_limit_or_id != '') {
+                $skip_msg = "<br>Skip node import {$identifier}: {$nid}<br>";
+                if (!empty($cron_identifier_arr) && !in_array($identifier, $cron_identifier_arr)) {
+                    if ($mode == 'web') {
+                        echo $skip_msg;
+                    }
+                    continue;
+                } else if (empty($cron_identifier_arr) && $import_limit != '' && $i > $import_limit) {
+                    if ($mode == 'web') {
+                        echo "*** BREAK::{$skip_msg}<br>";
+                    }
+                    break;
+                }
+            }
+            
+            /*if($identifier == '10738') {
+                echo "<br> Skip node import {$identifier}: {$nid}<br>";
+                continue;
+            }*/
+            $paragraph_fields = isset($paragraphCsvData[$identifier])?$paragraphCsvData[$identifier]:[];
+            $paragraph_data_cnt = count($paragraph_fields);
+
+            $node_para_data = $node->get($paragraph_node_field);
+            $node_para_cnt = count($node_para_data);
+
+            
+            $msg = "<br>{$i}=> Node ID: {$nid}, Identifier: {$identifier}, Paragraph Count: {$node_para_cnt}, CSV Paragraph Count: {$paragraph_data_cnt}\n";
+            #$logs .= $msg;
+            if ($mode == 'web') {
+                echo $msg;
+            }
+
+            // create paragraph items
+            #if (!empty($paragraph_fields) && $paragraph_data_cnt > $node_para_cnt) { // for skip update
+            if (!empty($paragraph_fields) && $paragraph_data_cnt > 0) { // everytime new data imported
+                if ($mode == 'web') {
+                    echo " --> Importing<br>";
+                    #print_r($paragraph_fields);
+                }
+                
+                $paragraphs = [];
+                foreach ($paragraph_fields as $key => $field_arr) {
+                    $imported++;
+                    #echo "=> $key) $paragraph_node_field {$field_arr['field_identifier']} ";print_r($field_arr);echo "<br>";exit;
+                    unset($field_arr['field_identifier']);
+                    
+                    if ($paragraph_node_field == 'field_documents' || $paragraph_node_field == 'field_property_image') {
+                        $field_arr_key = 'field_property_image';
+                        if ($paragraph_node_field == 'field_documents') {
+                            $field_arr_key = 'field_uniquefilename';
+                        }
+                        
+                        $file_exists = 'Yes';
+                        $csv_file_name = $field_arr[$field_arr_key];                        
+                        $file_uri = "{$document_path}{$csv_file_name}";
+                    
+                        if (!file_exists($file_uri)) {
+                            $file_exists = 'No';
+                            $csv_file_name = strtolower($csv_file_name);
+                            if (!empty($dir_files_arr) && isset($dir_files_arr[$csv_file_name]) && isset($field_arr[$field_arr_key])) {
+                                $field_arr[$field_arr_key] = $dir_files_arr[$csv_file_name];
+                            }
+                        }                    
+                    }
+                    
+                    if ($paragraph_node_field == 'field_property_image') {
+                        $filename = $field_arr['field_property_image'];
+                        $img_no   = $key + 1;
+                        $AltText  = ($field_arr['AltText'] != '')?$field_arr['AltText']:"{$title} {$img_no}";
+                        
+                        $file_uri = "public://property/images/{$filename}";
+                        $file_exists = 'No';
+                        $fid = '';
+                        if (file_exists($file_uri)) {
+                            $file_exists = 'Yes';
+                            
+                            try {
+                                // check if file already added or create new file
+                                $fid = add_file_and_get_fid($file_uri);
+
+                                if ($fid) {
+                                    $paragraphs[] = array(
+                                        'target_id' => $fid,
+                                        'alt' => $AltText,
+                                    );
+                                }
+                            } catch (Exception $exc) {
+                                $error = $exc->getTraceAsString();
+                                $errormsg = "<br>IMG) {$nid}, {$identifier} - {$filename} failed to upload, ERROR: {$error}";
+                                $error_msg .= $errormsg;
+                                
+                                if ($mode == 'web') {
+                                    echo $errormsg;
+                                }
+                            }
+                        }
+                        
+                        if ($mode == 'web') {
+                            echo "--> {$filename} exists: {$file_exists} (fid: $fid)<br>";
+                            #print_r($paragraph_fields);
+                        }
+
+                    } else {
+                        try {
+                            $paragraph = custom_module_create_paragraph($nid, $paragraph_node_field, $paragraph_machine_name, $field_arr);
+                            $paragraphs[] = array(
+                                'target_id' => $paragraph->id(),
+                                'target_revision_id' => $paragraph->getRevisionId(),
+                            );
+                        } catch (Exception $exc) {
+                            $error = $exc->getTraceAsString();
+                            $errormsg = "<br>Create Entry) {$nid}, {$identifier} - failed, ERROR: {$error}";
+                            $error_msg .= $errormsg;
+
+                            if ($mode == 'web') {
+                                echo $errormsg;
+                            }
+                        }
+                    }
+                }
+                #echo "<br>Paragraph::";print_r($paragraphs);exit;
+                if (!empty($paragraphs)) {
+                    try {
+                        $node = Node::load($nid);
+                        #$nodeArray['field_agents'] = $agents_paragraph;
+                        $node->set($paragraph_node_field, $paragraphs);
+                        $node->save();
+                    } catch (Exception $exc) {
+                        $error = $exc->getTraceAsString();
+                        $errormsg = "<br>Save to Property) {$nid}, {$identifier} - failed, ERROR: {$error}";
+                        $error_msg .= $errormsg;
+
+                        if ($mode == 'web') {
+                            echo $errormsg;
+                        }
+                    }
+                }
+            } else {
+                // if CSV file don't have a data then remove old data from property
+                $remove_data = '';
+                if ($paragraph_data_cnt == 0 && $node_para_cnt > 0) {
+                    $node = Node::load($nid);
+                    #$nodeArray['field_agents'] = $agents_paragraph;
+                    $node->set($paragraph_node_field, []);
+                    $node->save();
+                    
+                    $remove_data = "(Remove old data: {$nid}, {$identifier})";
+                    $remove_data_arr[] = "{$nid} => {$identifier} (Exsting data: {$node_para_cnt}, Data from csv: {$paragraph_data_cnt})";
+                }
+                
+                if ($mode == 'web') {
+                    echo "--> Not Importing {$remove_data}<br>";
+                    #print_r($paragraph_fields);
+                }
+            }
+            #exit;
+            // create paragraph items end
+
+            // node space available data
+            /*$paragraph_data = [];
+            foreach ($node_para_data as $para) {
+                if ($para->entity->getType() == $paragraph_machine_name) {
+                    $paragraph_data[] = $para->entity;
+                }
+            }
+
+            if (!empty($paragraph_data)) {
+                foreach ($paragraph_data as $key => $para) {
+                    $space_number = $para->field_space_number->value;
+                    echo "### Space number:: {$space_number}<br>";#print_r($test);echo "<br>";//exit;
+                }
+            }*/
+            
+        }
+    }
+    
+    $current_time = date('Y-m-d H:i:s');
+    
+    $import_failed = $total_records - $imported;
+    $msg = "---> Total: {$total_records}, Imported: {$imported}, Failed: {$import_failed}\n";
+    $remove_data_msg = '';
+    if (!empty($remove_data_arr)) {
+        $remove_data_msg = "---> No data in CSV then removed from Properties:\n";
+        $remove_data_msg .= implode($remove_data_arr, '\n');
+        $msg .= "{$remove_data_msg}\n";
+    }
+    
+    #$logs .= $msg;
+    
+    $msg .= "<br>---------------------------\n";
+    $msg .= $error_msg;
+    $msg .= "<br>***** Import process completed at {$current_time} *****<br>\n";
+    $logs .= $msg;
+    
+    #$logFileName = "property_data_import_logs.html";
+    if ($paragraph_machine_name != '') {
+        $logFileName = "{$paragraph_machine_name}_import_logs.html";
+    } else if ($paragraph_node_field == 'field_property_image') {
+        $logFileName = "property_images_import_logs.html";
+    }
+    $logFile = "sites/default/files/logs/{$logFileName}";
+    
+    $logFileContent = file_get_contents($logFile);
+    $logsAll = $logs.$logFileContent;
+    
+    file_put_contents($logFile, $logsAll);
+    
+    $logger_msg = "<strong>{$cron_type} - Cron Callback function:</strong> custom_module_import_paragraph_content_callback";
+    $cron_table = "CSV: {$csv_file}<br>Total: {$total_records}<br>Failed: {$import_failed}<br><strong>Updated:</strong> {$imported}{$file_not_exist_msg}<br>{$remove_data_msg}";
+    $notice_msg = "{$logger_msg}<br>{$cron_table}";
+    $logger = \Drupal::logger('custom_module')->notice($cron_table);
+    
+    // save logs and send email
+    #$cnt_msg = "<br><strong>Total:</strong> {$total_records}, <strong>Failed:</strong> {$failed_records}, <strong>Updated:</strong> {$imported}<br>";
+    #$logs_msg = "Import process for '{$cron_type}' completed successfully.<br><strong>LOGS:</strong> {$cnt_msg}";
+    $logs_msg = "Import process for '{$cron_type}' completed successfully.
+LOGS:
+CSV: {$csv_file}
+Total: {$total_records}
+Failed: {$import_failed}
+Updated: {$imported}
+{$remove_data_msg}";
+
+    send_cron_logs_email($cron_type, $logs_msg);
+    // save logs and send email end
+    
+    if ($mode == 'web') {        
+        echo $msg;
+        exit;
+    }
+    
+    #$response = "Import process for '{$paragraph_node_field}' completed successfully. LOGS: {$cnt_msg}";
+    #return $response;
+    #\Drupal::messenger()->addStatus(t($response));
+}
+
+/**
+ * Cron call back - Webform contact us data
+ * Webform - CSV export from view (admin/structure/views/view/webform_submissions_custom/edit/contactus_export)
+ * Callback function for cron - ultimate_cron.job.webform_data_export_by_view.yml
+ */
+function custom_module_webform_contactus_data_export() {
+    $viewId = 'webform_submissions_custom';
+    #$displayId = 'data_export_1';
+    $displayId = 'contactus_export';
+    
+    custom_module_webform_data_export_by_view_callback($viewId, $displayId);
+}
+
+/**
+ * Cron call back - Webform property data
+ * Webform - CSV export from view (admin/structure/views/view/webform_submissions_custom/edit/property_export)
+ * Callback function for cron - ultimate_cron.job.webform_data_export_by_view.yml
+ */
+function custom_module_webform_property_data_export() {
+    $viewId = 'webform_submissions_custom';
+    $displayId = 'property_export';
+    
+    custom_module_webform_data_export_by_view_callback($viewId, $displayId);
+}
+
+/**
+ * View Webform Submissions - CSV export (admin/structure/views/view/webform_submissions_custom/edit)
+ */
+function custom_module_webform_data_export_by_view_callback($viewId = '', $displayId = '') {
+    // Login as user 0 (anonymous)
+    #$user = User::load(0);
+    // Login as user 1
+    #$user = User::load(1);
+    #user_login_finalize($user);
+
+    if ($viewId == '' || $displayId == '') {
+        #return false;
+    }
+    
+    /*/
+    $view = Views::getView($viewId);
+    //$display = $view->preview('data_export_1');
+    #$views_preview = $view->preview($displayId);
+    $render_array = $view->buildRenderable($displayId);
+    $rendered = \Drupal::service('renderer')->renderRoot($render_array);
+    
+    echo "View::<pre>";kint($rendered);exit;
+    /**/
+    #echo "<br>kint1";kint1($rendered);exit; 
+    
+
+    $result = false;
+    $view = Views::getView($viewId);
+
+    if (is_object($view)) {
+        #$view->setDisplay($displayId);
+        //$view->setArguments($arguments);
+        // Set which view display we want.
+        $view->setDisplay($displayId);
+        
+        // Execute the view.
+        $view->execute();
+        
+        // Get the results of the view.
+        $view_result = $view->result;
+        
+        $view_render = $view->render();
+        // Render the view
+        #$result = \Drupal::service('renderer')->render($view_render);
+        $result = \Drupal::service('renderer')->renderPlain($view_render);
+        #$result = \Drupal::service('renderer')->renderRoot($view_render);
+        #echo "View render::";kint($view_result,$result);#exit;
+        #echo "View render::<pre>";kint($view_render);exit;
+    }
+#echo "Cron - export view $viewId, $displayId";exit;
+    #echo "<br>End";exit;
+    #return $result;
+    
+    if ($result) {
+        $current_date = date('Y-m-d_H.i.s');
+        $directory = 'public://csv/export';
+
+        $csv_file = "{$directory}/contactus-data-{$current_date}.csv";
+        if ($displayId == 'property_export') {
+            $csv_file = "{$directory}/property-data-{$current_date}.csv";
+        }
+
+        file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+        file_save_data($result, $csv_file, FILE_EXISTS_REPLACE);
+    }
+    #exit;
+    return;
+}
+
+/**
+ * clear all cache
+ */
+function custom_module_clear_all_cache ($mode = '') {
+    $variables['#cache']['max-age'] = 0;
+    \Drupal::service('page_cache_kill_switch')->trigger();
+    drupal_flush_all_caches();
+    #\Drupal::logger('custom_module')->notice('Custom - Clear all cache after import process completed by cron.');
+    \Drupal::logger('custom_module')->notice('Custom - Clear all cache.');
+    /*if ($mode == 'web') {
+        
+    }*/
+}

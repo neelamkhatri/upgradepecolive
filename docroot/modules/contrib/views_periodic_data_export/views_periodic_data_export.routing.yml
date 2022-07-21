@@ -1,0 +1,17 @@
+
+views_periodic_data_export.All_Periodic_export:
+  path: '/views_periodic_data_export'
+  defaults:
+    _controller: '\Drupal\views_periodic_data_export\Controller\PeriodicExportController::AllPeriodicExports'
+    _title: 'All periodic export'
+  requirements:
+    _permission: 'access views periodic data export'
+
+views_periodic_data_export.Periodic_export:
+  path: '/views_periodic_data_export/{viewId}/{displayId}'
+  defaults:
+    _controller: '\Drupal\views_periodic_data_export\Controller\PeriodicExportController::ViewDisplayPeriodicExports'
+    _title: 'View display Periodic export'
+  requirements:
+    _custom_access: '\Drupal\views_periodic_data_export\Controller\PeriodicExportController::accessViewDisplayPeriodicExports'
+

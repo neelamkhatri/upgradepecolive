@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - custom_module
+title: 'Custom - Property data export to CSV'
+id: webform_property_data_export_by_view
+weight: 0
+module: custom_module
+callback: custom_module_webform_property_data_export
+scheduler:
+  id: simple
+  configuration:
+    rules:
+      #- '*/15+@ * * * *'
+      - '0+@ * * * *'
+launcher:
+  id: serial
+logger:
+  id: database

@@ -1,0 +1,61 @@
+{{ element.elements.description }}
+<div class="container p-0 join-club-form">
+<form{{ attributes.addClass('mt-1') }}>
+    {{ title_prefix }}
+    {#{ children }#}
+    {#{ element.elements|without('description') }#}
+    {% if element.confirmation %}
+        {{ children }}
+    {% endif %}
+    {% if element.status_messages %}
+        {{ element.status_messages }}
+    {% endif %}
+    {{ element.progress }}
+    {{ element.form_token }}
+    {{ element.form_build_id }}
+    {{ element.form_id }}
+    <div class="row">
+    <div class="col-md-6">
+        <div class="form-group">
+        <label>First Name: <span class="text-danger">*</span></label>
+        {{ element.elements.first_name }}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-group">
+            {{ element.elements.last_name }}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-group">
+            <label>Email: <span class="text-danger">*</span></label>
+            {{ element.elements.email }}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-group">
+            {{ element.elements.phone }}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-group">
+            {{ element.elements.zip_code }}
+        </div>
+    </div>
+    
+    <div class="col-md-12">
+        <div class="form-group">
+            {{ element.elements.captcha }}
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="form-group">
+            {{ element.actions }}
+        </div>
+    </div>
+    {# {{ children }} #}
+    {{ title_suffix }}
+    </div>
+</form>
+</div>

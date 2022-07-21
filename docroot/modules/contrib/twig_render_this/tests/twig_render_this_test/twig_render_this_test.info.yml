@@ -1,0 +1,14 @@
+name: Twig Render This Test
+type: module
+description: 'Support module for Twig Render This testing.'
+package: Testing
+core: 8.x
+core_version_requirement: ^8 || ^9
+dependencies:
+  - drupal:node
+  - twig_render_this:twig_render_this
+
+# Information added by Drupal.org packaging script on 2020-03-31
+version: '8.x-1.08'
+project: 'twig_render_this'
+datestamp: 1585662176

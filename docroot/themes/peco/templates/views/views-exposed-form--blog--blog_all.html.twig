@@ -1,0 +1,53 @@
+{#
+/**
+ * @file
+ * Default theme implementation of a views exposed form.
+ *
+ * Available variables:
+ * - form: A render element representing the form.
+ *
+ * @see template_preprocess_views_exposed_form()
+ *
+ * @ingroup themeable
+ */
+#}
+{% if q is not empty %}
+    {#
+      This ensures that, if clean URLs are off, the 'q' is added first,
+      as a hidden form element, so that it shows up first in the POST URL.
+    #}
+    {{ q }}
+{% endif %}
+
+<div class="col-12 p-0">
+    <div class="blogList blogListSearch">
+      <div class="row align-items-start">
+              {# <ol>
+  {% for key, value in form  %}
+    <li>{{ key }}</li>
+  {% endfor %}
+</ol> #}
+        <div class="col-lg-3 mb-3 blogCateogry">   
+          {{ form.blog_category_collapsible }}
+          {# {{ form.publised_year}} #}
+        </div>
+        <div class="col-lg-2 mb-3 blogCateogry">
+        {{ form.published_on_val }}
+        {{ form.publish }}
+        </div>
+        <div class="col-lg-4 blogSort">
+          {{ form.sort_order }}
+          {{ form.actions }}
+        </div>
+        <div class="col-lg-3 mb-3 blogSearch">
+          {{ form.keys }}
+        </div>
+        {{ form.form_build_id }}
+        {{ form.form_id }}
+        {{ form.form_token }}
+
+
+{# {{form}} #}
+      </div>
+    </div>
+</div>

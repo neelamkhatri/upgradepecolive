@@ -1,0 +1,72 @@
+{{ element.elements.description }}
+<div class="container p-0 join-club-form text-color">
+<h3 style="font-weight: 300; margin-top: 30px;">Submit a new sale</h3>
+<form{{ attributes.addClass('mt-1') }}>
+    {{ title_prefix }}
+    {#{ children }#}
+    {#{ element.elements|without('description') }#}
+    {% if element.confirmation %}
+        {{ children }}
+    {% endif %}
+    {% if element.status_messages %}
+        {{ element.status_messages }}
+    {% endif %}
+    {{ element.progress }}
+    {{ element.form_token }}
+    {{ element.form_build_id }}
+    {{ element.form_id }}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="form-group">
+            <label>Sales Title: <span class="text-danger">*</span></label>
+            {{ element.elements.sales_title }}
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group">
+                <label>Start Date: <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    {{ element.elements.start_date }}
+                </div>
+            </div>
+        </div>    
+        <div class="col-md-6">
+            <div class="form-group">
+                <label>End Date: <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    {{ element.elements.end_date }}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">   
+        <div class="col-md-6">
+            <div class="form-group">
+            <label>Store: <span class="text-danger">*</span></label>
+            {{ element.elements.store }}
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="form-group">
+            {{ element.elements.featured_image }}
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="form-group">
+            {{ element.elements.sales_description }}
+            </div>
+        </div>
+        
+    </div>
+    
+    {{ element.elements.captcha }}
+  
+    {{ element.actions }}
+    {{ title_suffix }}
+</form>
+</div>

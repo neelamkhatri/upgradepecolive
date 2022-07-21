@@ -1,0 +1,161 @@
+
+.path-frontpage .main-content,
+.services,
+.products,
+.features,
+.copyright,
+.clients,
+.top-message,
+.topwidget,
+.midwidget,
+.btmwidget,
+.updates,
+.footer{
+	padding: 40px 0;
+}
+
+.main-content{
+	padding: 0 0 50px 0;
+}
+
+.footer,
+.features,
+.midwidget{
+    background: #f1f1f1;
+}
+
+.skills{
+	.skill{
+		margin-bottom: 20px;
+	}
+	.line{
+		background: #ddd;
+	}
+	.skill-label{
+		float: left;
+	}
+}
+
+.features-list{
+	background-color: #f1f1f1;
+
+	.region{
+		background: #fff;
+		padding: 20px;
+		@include border-radius(5px);
+		overflow: hidden;
+		@include box-shadow(1px 2px 1px 1px #e8e8e8);
+	}
+}
+
+.footer{
+
+	tbody tr:hover, tbody tr:focus {
+	    background: none;
+	}
+}
+
+.clients{
+	.region{
+		ul {
+			li{
+				display: inline-block;
+				width: 100%;
+				text-align: center;
+
+				img{
+					max-width: 200px;
+				}
+			}
+		}
+	}
+}
+
+.services{
+	text-align: center;
+}
+
+
+/* Testimonials */
+
+.testimonials-wrap{
+	background: #fafafa;
+	border-top: solid 1px #e3e3e3;
+	border-bottom: solid 1px #e3e3e3;
+	padding: 20px 0;
+	text-align: center;
+	font-size: 1em;
+	line-height: 160%;
+}
+
+.region-testimonials{
+	max-width: 600px;
+	margin: 0 auto;
+}
+
+.testimonials-pic{
+	width: 40px;
+	height: 40px;
+	display: inline-block;
+	vertical-align: bottom;
+	margin-right: 10px;
+}
+
+.testimonials-pic img{
+	@include border-radius(50%);
+}
+
+.testimonials-author{
+	padding: 0 5px;
+	font-size: .75em;
+	color: #555;
+}
+
+/*Price table*/
+
+.price-table{
+	.card-header{
+		border: 0;
+    	padding: 20px 0;
+	}
+
+	ul li {
+	    list-style: none;
+	    border-bottom: 1px solid #eee;
+	    padding-bottom: 10px;
+	    margin-bottom: 10px;
+	}
+}
+
+
+/*Front Page*/
+
+.path-frontpage .feed-icon{
+ 	display: none;
+}
+
+
+/*Team*/
+
+.team{
+	.team-list{
+		.region{
+			background: #efefef;
+			overflow: hidden;
+			padding: 10px;
+			border: 1px solid #eaeaea;
+		}
+	}
+}
+
+
+/*Bottom Widgets*/
+
+.btmwidget{
+	background: #fff;
+}
+
+.path-frontpage .btmwidget{
+	padding: 20px 0;
+}
+

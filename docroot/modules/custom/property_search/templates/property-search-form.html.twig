@@ -1,0 +1,44 @@
+{#
+/**
+ * @file - Property search form
+ * 
+ */
+#}
+{% set form_class = 'row' %}
+ 
+{% if is_front %}
+    {#% set form_class = 'input-group' %#}
+{#% elseif current_uri == '/properties' or '/properties/' in current_uri %#}
+{% elseif current_uri == '/properties' or '/properties/' in current_uri or  '/property-search' in current_uri %}
+    {% set form_class = 'row justify-content-center' %}
+{% endif %}
+
+<div class="{{ form_class }}">
+    {{ form }}
+</div>
+
+{#
+    {{ form.form_token }}
+    {{ form.form_build_id }}
+    {{ form.form_id }}
+    {{ form.form_action }}
+
+    <div class="col-md-6">                                        
+        <div class="input-group">
+          {{ form.state }}
+        </div>
+    </div>
+    <div class="col-md-6">                                        
+        <div class="input-group">
+          {{ form.city }}
+        </div>
+    </div>
+    <div class="col-md-12">                                        
+        <div class="input-group">
+          {{ form.title }}
+        </div>
+    </div>
+    <div class="col-md-12">
+        {{ form.submit }}
+    </div>                        
+#}

@@ -1,0 +1,8 @@
+name: Custom Module
+type: module
+description: Custom functionality
+core_version_requirement: 8.x
+package: Other
+configure: custom_module.admin_settings
+dependencies:
+  - drupal:node

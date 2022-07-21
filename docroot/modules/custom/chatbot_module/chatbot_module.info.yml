@@ -1,0 +1,4 @@
+name: Dialogflow Chat Bot Module
+type: module
+core: '8.x'
+description: 'Dialogflow chat bot integration'

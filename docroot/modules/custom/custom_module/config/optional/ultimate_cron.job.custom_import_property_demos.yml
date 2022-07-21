@@ -1,0 +1,19 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - custom_module
+title: 'Import Property From CSV - Demographics Data'
+id: custom_import_property_demos
+weight: 0
+module: custom_module
+callback: custom_module_import_property_demos_data_callback
+scheduler:
+  id: simple
+  configuration:
+    rules:
+      - '0+@ 0 * * *'
+launcher:
+  id: serial
+logger:
+  id: database

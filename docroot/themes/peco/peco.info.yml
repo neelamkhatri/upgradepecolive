@@ -1,0 +1,19 @@
+name:  PECO
+type:  theme
+description:  'Custom theme for PECO'
+version:  8.x
+core:  8.x
+libraries:
+  - peco/global-styling
+  - peco/custom
+regions:
+  top_menu: Top Menu
+  header: Header
+  property_search: Property Search Form
+  content: Content
+  content_left: Content Left
+  content_right: Content Right
+  content_bottom: Content bottom
+  contact_us: Contact Us
+  footer: Footer
+  callback_block: 'Callback Block - For Custom Only'

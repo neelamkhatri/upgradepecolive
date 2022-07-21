@@ -1,0 +1,13 @@
+name: Views Reference Filter
+description: Provides views-based filter for entity reference and entity id fields in views.
+type: module
+core: 8.x
+core_version_requirement: ^8 || ^9
+php: 7.1
+dependencies:
+  - drupal:views
+
+# Information added by Drupal.org packaging script on 2020-09-05
+version: '8.x-1.2'
+project: 'entityreference_filter'
+datestamp: 1599301751

@@ -1,0 +1,469 @@
+<?php
+
+/**
+ * @file
+ * Property search 
+ */
+
+use Drupal\Core\Url;
+use Drupal\node\Entity;
+use Drupal\node\Entity\Node;
+use Drupal\node\Entity\NodeType;
+use Drupal\node\NodeInterface;
+use Drupal\node\NodeTypeInterface;
+use Drupal\views\Views;
+use Drupal\views\ViewExecutable;
+use Drupal\Core\Render\BubbleableMetadata;
+use Drupal\taxonomy\Entity\Vocabulary;
+use Drupal\taxonomy\Entity\Term;
+use Drupal\user\Entity\User;
+
+use Drupal\Core\Form\FormStateInterface;
+
+use Drupal\views\Plugin\views\query\QueryPluginBase;
+use Drupal\Core\Database\Query\AlterableInterface;
+
+use \Drupal\Core\Entity\EntityInterface;
+use \Drupal\menu_link_content\Entity\MenuLinkContent;
+
+function property_search_theme($existing, $type, $theme, $path) {
+    #$form = \Drupal::formBuilder()->getForm('Drupal\property_search\Form\PropertySearchForm');
+    $variables = array(
+        'property-search-form' =>array(
+            'render element'  => 'form',
+        ), 
+    );
+
+    return $variables;
+}
+
+/**
+ * @param $form
+ * @param FormStateInterface $form_state
+ * @param $form_id
+ */
+function property_search_form_alter(&$form, FormStateInterface $form_state, $form_id)
+{
+    
+    switch ($form_id) {
+        case 'property_search_form':
+            // add prefix to <form> tag
+            #$form['#prefix'] = '<div class="w-100 form-box">';
+            // add suffix to </form> tag
+            #$form['#suffix'] = '</div>';
+            //add a class in form tag <form class="col-10 ..."
+            #$form['#attributes']['class'][] = 'w-100 form-box';
+            $form['submit']['#submit'][] = 'property_search_custom_form_submit';
+        break;
+        case 'views_exposed_form':     
+            $current_uri = \Drupal::request()->getRequestUri();
+            $is_admin_uri = strpos($current_uri,'/admin');
+            
+            $view = $form_state->getStorage('view');
+            #if (($view['view']->id() == 'property_search') && ($view['view']->current_display == 'search')) {
+            if ($view['view']->id() == 'property_search' && $is_admin_uri === false) {
+                #kint($view['view']->id(),$form_id,$form['#id']);
+                /*$form['contact']['#options']["All"] = 'Contact (All)';
+                $form['use_type']['#options']["All"] = 'Use Type (All)';
+                $form['population']['#options']["All"] = 'Population (All)';
+                $form['gla']['#options']["All"] = 'GLA (All)';
+                $form['income']['#options']["All"] = 'Income (All)';*/
+
+                #$form['contact']['#attributes'] = array('id' => 'searchby-contact');
+                $form['contact']['#attributes']['class'] = array('form-control');
+                $form['population']['#attributes']['class'] = array('form-control');
+                $form['gla']['#attributes']['class'] = array('form-control');
+                
+                #$form['property_type']['#attributes']['class'] = array('form-control');
+                $form['available']['#attributes']['class'] = array('form-control');
+                $form['income']['#attributes']['class'] = array('form-control');
+                $form['sqft']['#attributes']['class'] = array('form-control');
+                
+                $form['contact']['#prefix'] = '<div class="input-group select-state">'
+                        . '<div id="frm-searchby-contact" class="searchby-item hidden">';
+                $form['contact']['#suffix'] = '</div>';
+                
+                $form['population']['#prefix'] = '<div id="frm-searchby-population" class="searchby-item hidden"><div class="text-center"><h5>Within a 3-mile radius</h5></div>';
+                $form['population']['#suffix'] = '</div>';
+                $form['gla']['#prefix'] = '<div id="frm-searchby-gla" class="searchby-item hidden">';
+                $form['gla']['#suffix'] = '</div>';
+                
+                #$form['property_type']['#prefix'] = '<div id="frm-searchby-property_type" class="searchby-item hidden">';
+                #$form['property_type']['#suffix'] = '</div>';
+                $form['available']['#prefix'] = '<div id="frm-searchby-available" class="searchby-item hidden">';
+                $form['available']['#suffix'] = '</div>';
+                
+                $form['income']['#prefix'] = '<div id="frm-searchby-income" class="searchby-item hidden"><div class="text-center"><h5>Within a 3-mile radius</h5></div>';
+                $form['income']['#suffix'] = '</div></div>';
+                
+                $form['sqft']['#prefix'] = '<div id="frm-searchby-sqft" class="searchby-item hidden"><div class="text-center"><h5>Available SF</h5></div>';
+                $form['sqft']['#suffix'] = '</div>';
+                if (isset($form['sqft']['min'])) {
+                    $form['sqft']['min']['#title'] = 'Min';
+                }
+                if (isset($form['sqft']['max'])) {
+                    $form['sqft']['max']['#title'] = 'Max';
+                }
+                        
+                if (isset($form['title'])) {
+                    $form['title']['#prefix'] = '<div id="frm-searchby-title" class="searchby-item hidden">';
+                    $form['title']['#suffix'] = '</div>';
+                }
+                if (isset($form['overview'])) {
+                    $form['overview']['#prefix'] = '<div id="frm-searchby-overview" class="searchby-item hidden">';
+                    $form['overview']['#suffix'] = '</div>';
+                }
+                if (isset($form['tenant'])) {
+                    $form['tenant']['#prefix'] = '<div id="frm-searchby-tenant" class="searchby-item hidden">';
+                    $form['tenant']['#suffix'] = '</div>';
+                }
+                if (isset($form['agent_name'])) {
+                    $form['agent_name']['#prefix'] = '<div id="frm-searchby-agent_name" class="searchby-item hidden">';
+                    $form['agent_name']['#suffix'] = '</div>';
+                }
+                
+                // state, city
+                if (isset($form['state'])) {
+                    $form['state']['#prefix'] = '<div id="frm-searchby-state" class="searchby-item hidden">';
+                    $form['state']['#suffix'] = '</div>';
+                }
+                if (isset($form['city'])) {
+                    $form['city']['#prefix'] = '<div id="frm-searchby-city" class="searchby-item hidden">';
+                    $form['city']['#suffix'] = '</div>';
+                }
+                
+                if (isset($form['use_type'])) {
+                    $form['use_type']['#attributes']['class'] = array('form-control');
+                    $form['use_type']['#prefix'] = '<div id="frm-searchby-use_type" class="searchby-item hidden">';
+                    $form['use_type']['#suffix'] = '</div>';
+                }
+                
+                if (isset($form['address'])) {
+                    $form['address']['#prefix'] = '<div id="frm-searchby-address" class="searchby-item hidden">';
+                    $form['address']['#suffix'] = '</div>';
+                }
+                
+                $form['actions']['submit']['#prefix'] = '<div id="frm-searchby-submit" class="">';
+                $form['actions']['submit']['#suffix'] = '</div>';
+                $form['actions']['submit']['#attributes']['class'] = array('btn-primary');
+                #$form['actions']['reset']['#weight'] = $form['actions']['submit']['#weight']-1;
+                
+                #$form['actions']['submit']['#attributes'] = array('class'=>['btn btn-primary']);
+            }
+            
+            #$prop_search_form = strpos($form['#id'],'views-exposed-form-property-search');
+            //views-exposed-form-property-search
+            /*if ($prop_search_form !== false) {
+                kint($form_id,$form['#id']);
+            }*/
+        break;
+    }
+
+}
+
+function property_search_custom_form_submit ($form, FormStateInterface $form_state) {
+    $state_all_val = 'all states';
+    $city_all_val = 'all cities';
+    
+    #$user = User::load(1);
+    $values = $form_state->getValues();
+    $state = isset($values['state'])?$values['state']:$state_all_val;
+    $city = isset($values['city'])?$values['city']:$city_all_val;
+    $title = isset($values['title'])?$values['title']:'';
+    
+    $path = "/properties/{$state}/{$city}";
+    if ($title != '') {
+        $path = "/properties/{$state}/{$city}/{$title}";
+    } else if ($city == $city_all_val && $title == '') {
+    //} else if ($city == 'all cities' && $title == '') {
+        $path = "/properties/{$state}";
+    }
+    //$url = Url::fromUserInput($path, ['query' => $path_param]);
+    $url = Url::fromUserInput($path);
+    #Kint($values);#exit;
+    
+    $form_state->setRedirectUrl($url);
+    #echo "Hello submit:<pre>";print_r($values);exit;
+    #$form_state->setRedirect('/properties/california/atwater/');
+}
+
+/**
+ * Implements hook_views_query_alter().
+ */
+/*function property_search_views_query_alter(ViewExecutable $view, QueryPluginBase $query) {
+    $current_display = $view->current_display;
+    $view_id = $view->id();
+    
+    // add views id in array for alteration
+    $view_ids = ['property_search'];
+    $view_display = [
+        'property_search'=>['search','search_filter'],
+    ];
+    
+    if (in_array($view_id, $view_ids)) {
+        // views current display
+        if (in_array($current_display, $view_display[$view_id])) {
+            $arg = $view->args;
+            $title = (isset($arg[2]))?$arg[2]:'all';
+            #echo "Kint::";kint($arg);
+            if (isset($arg[2]) && $title != 'all') {
+                #echo "<br>Search: {$title}";
+                #$view->args[2] = "%{$title}%";
+                #$view->args[2] = "all";
+            }
+        }
+    }
+}*/
+
+/**
+ * Implements hook_views_query_alter().
+ */
+function property_search_views_query_alter(ViewExecutable $view, QueryPluginBase $query) {
+    $current_display = $view->current_display;
+    $view_id = $view->id();
+    
+    // add views id in array for alteration
+    $view_ids = ['property_search'];
+    $view_display = [
+        'property_search'=>['search','search_filter','list'],
+    ];
+
+    if (in_array($view_id, $view_ids)) {
+        // views current display
+        if (in_array($current_display, $view_display[$view_id])) {
+            $available = isset($_REQUEST['available'])?$_REQUEST['available']:'';
+            #$available = 2;
+            if ($available != '' && $available != 'All') {
+                $op = 'IN';
+                if ($available != 1) {
+                    $op = 'NOT IN';
+                }
+                
+                $nids = get_available_property_ids();
+                if ($nids == false) {
+                    $nids = [0];
+                }
+                #kint($op, count($nids),$query->where);
+                
+                if (isset($query->where[1]['conditions']) && !empty($query->where[1]['conditions'])) {
+                    foreach ($query->where[1]['conditions'] as $key => $val) {
+                        if ($val['field'] == 'paragraphs_item_field_data_node__field_space_available__paragraph__field_coming_available.field_coming_available_value') {
+                            #unset($query->where[1]['conditions'][$key]);
+                            #$query->addWhere(0, 'nid', $nids, $op); // working - For use this uncomment above line and comment below code
+                            
+                            // replace space availability filter with NID field fileter
+                            $query->where[1]['conditions'][$key] = [
+                              'field' => 'nid',
+                              'value' => $nids,
+                              'operator' => $op,
+                            ];
+                            
+                            break;
+                        }
+                    }
+                }
+                
+                #$query->addWhere(0, 'nid', $nids, $op); // working
+            }
+        }
+    }       
+}
+/**
+ * Implements hook_views_pre_build().
+ * change or set default season id to verf entity reference season filter
+ */
+function property_search_views_pre_build(ViewExecutable $view) {
+    $current_display = $view->current_display;
+    $view_id = $view->id();
+    
+    // add views id in array which have entity reference  season filter and require to set latest season id as default value
+    $view_ids = ['property_search'];
+    $view_display = [
+        'property_search'=>['search','search_filter','list'],
+    ];
+    #kint($view);exit;
+    
+    if (in_array($view_id, $view_ids)) {
+        // views current display
+        if (in_array($current_display, $view_display[$view_id])) {
+            $arg = $view->args;
+            $title = (isset($arg[2]))?$arg[2]:'';
+            #echo "Kint::";kint($arg);            
+            #echo "<br>Search: {$title}<br>";
+            
+            $title_filter = false;
+            
+            // check filter
+            if (!empty($view->filter)) {
+                // taxonomy field: name = state, name_1 = city
+                $search_by_keywords = ['title','field_overview_value','field_tenant_value','field_agent_name_target_id','name','name_1','field_property_address_value','field_searchable_keywords_value'];
+                
+                $agent_id = get_nid_from_title($title, 'agents');
+                if (!empty($agent_id)) {
+                    // URL query parameter.
+                    \Drupal::request()->query->set('contact', $agent_id);
+                    #$contact_query = \Drupal::request()->query->get('contact');
+                    #$all_query = \Drupal::request()->query->all();
+                }
+                                
+                $searchby_use_type = false;
+                $use_type_query = \Drupal::request()->query->get('use_type');
+                if($use_type_query == 822){
+                    \Drupal::request()->query->set('use_type', 'All');
+                }
+                if ($title != '' && $title != 'all') {
+                    $use_type_id = get_term_id_by_name($title,'use_type');
+                    //$_REQUEST['use_type'] = $title;
+                    $view->args[2] = "all";
+                    if ($current_display == 'search' || !empty($use_type_id)) {
+                        #$_REQUEST['use_type'] = $title;
+                        $searchby_use_type = true;
+                    }
+                    
+                    foreach ($view->filter as $key => $filter) {
+                        if ($searchby_use_type) {
+                            if ($key == 'field_priorttype_target_id') {
+                                #kint($view->filter[$key]);
+                                if($use_type_id == 822){
+                                    $view->filter[$key]->value = '';    
+                                }
+                                else{
+                                    $view->filter[$key]->value = $use_type_id; 
+                                }
+                                // $view->filter[$key]->value = $use_type_id;
+                                #echo "Key: $key<br>";
+                            }
+                        } else if (in_array($key, $search_by_keywords) && $title != '') {
+                            $title_filter = true;
+                            #echo "Key: $key<br>";
+
+                            if ($key == 'field_agent_name_target_id') {
+                                //echo "Agent id: {$agent_id}";
+                                $view->filter[$key]->value['value'] = $agent_id;
+                                #echo "<br>$key:: ";kint($view->filter[$key]->value);
+                            } else {
+                                $view->filter[$key]->value = $title;
+                            }
+                        } else {
+
+                        }
+                        #echo "<br>$key:: ";kint($view->filter[$key]->value);
+                    }
+                }
+            }
+                        
+            #$view->args[0] = "arizona";
+            #$view->setArguments(['arizona','all','all']);
+            
+            if (isset($arg[2]) && $title != 'all' && $title_filter) {
+                #echo "<br>Search: {$title}";
+                #$view->args[2] = "%{$title}%";
+                #$view->args[2] = "all";
+            }
+        }
+    }
+}
+
+/**
+ * get property available property ids
+ * $available (1 = available, other value = Not available)
+ */
+function get_available_property_ids ($available = 1) {
+    #echo "<br>=> Available: {$available}<br>";var_dump($available);
+    $query = \Drupal::entityQuery('node')
+	->condition('type', 'properties')
+        ->condition('status', 1)
+        ->condition('field_space_available.entity.field_coming_available', true);
+    /* // for space available - comming_availalbe = true or tenant is null
+    $query = \Drupal::entityQuery('node')
+	->condition('type', 'properties')
+        ->condition('status', 1);
+        //->condition('field_space_available.entity.field_coming_available', true);
+    $group = $query
+        ->orConditionGroup()
+        ->condition('field_space_available.entity.field_coming_available', true)
+        //->condition('field_space_available.entity.field_tenant', '', '!=')
+        ->condition('field_space_available.entity.field_tenant', NULL, 'IS NULL');
+    $query->condition($group);
+    */
+    /*if ($field_name != '') {
+        $query->condition($field_name, $field_val);
+    }*/
+    
+    $nids = $query->execute();
+    
+    $node_ids = false;
+    if (!empty($nids)) {
+        $node_ids = array_values($nids);
+    }  
+    #return $node_ids;
+    
+    #echo "<pre>Available: <br>".count($node_ids);print_r($node_ids);
+    // for not available nodes
+    if ($node_ids && $available != 1) {
+        #echo "<br>=> Available not 1: {$available}<br>";
+        $query = \Drupal::entityQuery('node')
+            ->condition('type', 'properties')
+            ->condition('status', 1)
+            //->condition('field_space_available.entity.field_coming_available', false);
+            ->condition('nid', $node_ids, 'NOT IN');
+        $nids = $query->execute();
+        
+        $node_ids = false;
+        if (!empty($nids)) {
+            $node_ids = array_values($nids);
+        }  
+        #echo "<br>Not Available:<br>".count($node_ids);print_r($node_ids);
+    }
+
+    return $node_ids;
+}
+
+/**
+* Taxonomy get States and city lists
+* @return type list
+*/
+function get_nid_from_title($title = '', $type = '') {
+    if ($title == '') {
+        return 0;
+    }
+    
+   $query = \Drupal::entityQuery('node');
+   $query->condition('status', 1);
+   $query->condition('title', $title);
+   $query->condition('type', $type);
+   $nids = $query->execute();
+   
+    if (!empty($nids)) {
+        $node_ids = array_values($nids);
+        
+        return $node_ids[0];
+    }
+    
+    return 0;
+}
+
+/**
+ * To get Term id from name.
+ * get_term_id_by_name('title', 'use_type')
+ */
+function get_term_id_by_name($name, $voc = '') {
+    if ($name == '') {
+        return false;
+    }
+        
+    $tid = '';
+    if ($name != '') {                
+        $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')
+            ->loadByProperties(['name' => $name, 'vid' => $voc]);
+        
+        #kint($name, $term);
+        
+        if (!empty($term)) {
+            $term = reset($term);
+            $tid = $term->id();               
+        } 
+    }
+    
+    return $tid;
+}

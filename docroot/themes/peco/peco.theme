@@ -1,0 +1,417 @@
+<?php
+
+/**
+ * @file
+ * Functions to support theming in the Bartik theme.
+ */
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Template\Attribute;
+use Drupal\Core\Block\BlockBase;
+use Drupal\node\Entity\Node;
+use Drupal\views\Views;
+use Drupal\views\ViewExecutable;
+
+/**
+ * Implements hook_preprocess_HOOK()
+ *
+ */
+function peco_preprocess_page_title(&$variables) {
+ 
+}
+
+/**
+ * Implements hook_preprocess_HOOK()
+ *
+ */
+function peco_preprocess_html(&$variables) {
+    #kint($variables);   
+    $site_config = \Drupal::config('system.site');
+    $variables['site_name'] = $site_config->get('name');
+    $variables['site_slogan'] = $site_config->get('slogan');
+    
+    $current_path = \Drupal::service('path.current')->getPath();
+    $current_uri = \Drupal::request()->getRequestUri();
+
+    $variables['current_path'] = $current_path;
+    $variables['current_uri']  = $current_uri;
+    
+    $parameters = \Drupal::routeMatch()->getParameters();
+    
+    $variables['route_name'] = \Drupal::routeMatch()->getRouteName();    
+        
+    // page title and meta description: as per excel file: PECO Dynamic Page Titles.xlsx
+    if ($variables['route_name'] == 'view.property_search.search_filter') {
+        $state    = \Drupal::routeMatch()->getParameter('arg_0');
+        $city     = \Drupal::routeMatch()->getParameter('arg_1');
+        $keyword  = \Drupal::routeMatch()->getParameter('arg_2');
+        
+        $state_name    = ucwords($state);
+        $city_name     = ucwords($city);
+        $keyword_name  = ucwords($keyword);
+        
+        // check if keyword is a Use Type or not
+        $use_type = $use_type_name = '';
+        if ($keyword != '') {
+            $term = \Drupal::entityTypeManager()->getStorage('taxonomy_term')
+                ->loadByProperties(['name' => $keyword, 'vid' => 'use_type']);
+
+            if (!empty($term)) {
+                $term = reset($term);
+                $tid = $term->id();
+                
+                $use_type = $keyword;
+                $use_type_name = $keyword_name;
+            } 
+        }
+        
+        // default for property_search or properties(url changed) page 
+        // url: /properties | /property_search
+        $head_title = "Property Search";
+        $head_meta_description = "Property Search Meta description";
+        
+        #echo "html- {$state} > $city > $keyword :: {$variables['route_name']}> <br>";
+        #print_r($parameters);      
+        
+        if ($state != '' && $state != 'all states' && $city == '' && $keyword == '') {
+            //State search results page:: State > url: /properties/arizona
+            $head_title = "Retail Space for Lease in {$state_name}";
+            $head_meta_description = "Find retail space for lease in {$state_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$state_name}.";
+            
+        } else if ($state != '' && $state != 'all states' && $city != '' && $city != 'all cities' && $keyword == '') {
+            //State and City search results page:: City > url: /properties/arizona/avondale
+            
+            $head_title = "Retail Space for Lease in {$city_name}, {$state_name}";
+            $head_meta_description = "Find retail space for lease in {$city_name}, {$state_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$city_name}, {$state_name}.";
+            
+        }  else if ($state != '' && $state != 'all states' && $city != '' && $city != 'all cities' && $use_type != '') {
+            //State, City and use type search results page:: Use Type > url: /properties/arizona/avondale/restaurant
+            
+            $head_title = "{$use_type_name} Space for Lease in {$city_name}, {$state_name}";
+            $head_meta_description = "Find {$use_type_name} space for lease in {$city_name}, {$state_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$city_name}, {$state_name}."; 
+        
+            
+        } else if ($state == 'all states' && $city == 'all cities' && $use_type != '') {
+            //Use type search results page:: Use Type > url: /properties/all states/all cities/restaurant
+            
+            $head_title = "{$use_type_name} Space for Lease";
+            $head_meta_description = "Find {$use_type_name} space for lease in the United States. Visit Phillips Edison & Company for all your commercial real estate needs.";
+            
+        }  else if ($state != '' && $state != 'all states' && $city == 'all cities' && $use_type != '') {
+            //Use type and State search results page:: Use Type > url: /properties/arizona/all cities/restaurant
+            
+            $head_title = "{$use_type_name} Space for Lease in {$state_name}";
+            $head_meta_description = "Find {$use_type_name} space for lease in {$state_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$state_name}.";
+            
+        } else if ($state == 'all states' && $city != '' && $city != 'all cities' && $use_type == '') {
+            //City search results page:: City > url: /properties/all states/avondale
+            
+            $head_title = "Retail Space for Lease in {$city_name}";
+            $head_meta_description = "Find retail space for lease in {$city_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$city_name}.";
+            
+        } else if ($state == 'all states' && $city != '' && $city != 'all cities' && $use_type != '') {
+            //Use type and City search results page:: Use Type > url: /properties/all states/avondale/restaurant
+            
+            $head_title = "{$use_type_name} Space for Lease in {$city_name}";
+            $head_meta_description = "Find $use_type_name space for lease in {$city_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$city_name}.";
+        } 
+        // if keyword not an use type
+        else if ($state != '' && $state != 'all states' && $city != '' && $city != 'all cities' && $keyword != '' && $use_type == '') {
+            //State, City and use type search results page:: Use Type > url: /properties/arizona/avondale/restaurant
+            
+            $head_title = "Retail Space for Lease in {$city_name}, {$state_name}";
+            $head_meta_description = "Find retail space for lease in {$city_name}, {$state_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$city_name}, {$state_name}."; 
+                    
+        } else if ($state == 'all states' && $city == 'all cities' && $keyword != '' && $use_type == '') {
+            //Use type search results page:: Use Type > url: /properties/all states/all cities/keyword
+            
+            $head_title = "Retail Space for Lease";
+            $head_meta_description = "Find retail space for lease in the United States. Visit Phillips Edison & Company for all your commercial real estate needs.";
+            
+        }  else if ($state != '' && $state != 'all states' && $city == 'all cities' && $keyword != '' && $use_type == '') {
+            //Use type and State search results page:: Use Type > url: /properties/arizona/all cities/keyword
+            
+            $head_title = "Retail Space for Lease in {$state_name}";
+            $head_meta_description = "Find {$use_type_name} space for lease in {$state_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$state_name}.";
+            
+        } else if ($state == 'all states' && $city != '' && $city != 'all cities' && $keyword == '') {
+            //City search results page:: City > url: /properties/all states/avondale
+            
+            $head_title = "Retail Space for Lease in {$city_name}";
+            $head_meta_description = "Find retail space for lease in {$city_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$city_name}.";
+            
+        } else if ($state == 'all states' && $city != '' && $city != 'all cities' && $keyword != '' && $use_type == '') {
+            //Use type and City search results page:: Use Type > url: /properties/all states/avondale/keyword
+            
+            $head_title = "Retail Space for Lease in {$city_name}";
+            $head_meta_description = "Find retail space for lease in {$city_name}, United States. Visit Phillips Edison & Company for all your commercial real estate needs in {$city_name}.";
+        }
+        
+        $meta_description = [
+            '#tag' => 'meta',
+            '#attributes' => [
+                'name' => 'description',
+                'content' => t($head_meta_description),
+            ],
+        ];
+        $variables['head_title'] = "{$head_title} | {$variables['site_name']}";
+        $variables['page']['#attached']['html_head'][] = [$meta_description, 'description'];
+    }
+    // meta title and description end
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for block templates.
+ */
+function peco_preprocess_page(&$variables) {
+    global $user;
+    $site_config = \Drupal::config('system.site');
+    $variables['site_name'] = $site_config->get('name');
+    $variables['site_slogan'] = $site_config->get('slogan');
+
+    $current_path = \Drupal::service('path.current')->getPath();
+    #$current_path_alias = \Drupal::service('path.alias_manager')->getAliasByPath($current_path);
+    $current_uri = \Drupal::request()->getRequestUri();
+
+    $variables['current_path'] = $current_path;
+    $variables['current_uri']  = $current_uri;
+    
+    $parameters = \Drupal::routeMatch()->getParameters();
+    $arg0 = \Drupal::routeMatch()->getParameter('arg_0');
+    
+    $variables['route_name'] = \Drupal::routeMatch()->getRouteName();    
+    $variables['currentusername'] = \Drupal::currentUser()->getUsername();
+    
+    #echo "<pre>Print::";print_r($current_path_alias);echo "</pre>";
+    
+    // logo needs to be placed within specified folder
+    $variables['logopath'] = file_url_transform_relative(file_create_url(theme_get_setting('logo.url')));
+    $variables['envsite'] = getenv('AH_SITE_ENVIRONMENT');
+    
+    /* webform block */    
+    /*$contact_form = \Drupal\webform\Entity\Webform::load('contact');
+
+    $rendered_contact_form = \Drupal::entityManager()
+          ->getViewBuilder('webform')
+          ->view($contact_form);
+    $variables['webform_contact'] = $rendered_contact_form;*/
+    /* webform block end */
+}
+
+/**
+ * Implements hook_preprocess_user().
+ */
+function peco_preprocess_user(&$variables) {
+  /** @var User $account */
+  $account = $variables['elements']['#user'];
+
+  $variables['username'] = $account->getDisplayName();
+}
+
+function peco_form_search_block_form_alter(&$form, FormStateInterface $form_state) {
+  //$form['keys']['#attributes']['placeholder'] = t('Search suburbanonesports.com');
+   $form['keys']['#attributes']['class'][] = 'form-control ';
+   unset($form['actions']['submit']);
+}
+
+function peco_preprocess(&$variables, $hook) {
+    global $base_url;
+    //$variables['base_path'] = base_path();
+    //echo "Base url: $base_url";exit;
+    
+    $variables['is_front'] = \Drupal::service('path.matcher')->isFrontPage();
+    
+    $variables['theme_path'] = \Drupal::theme()->getActiveTheme()->getPath();
+    $variables['theme_images_path'] = $base_url.'/'.$variables['theme_path'].'/images/';
+   
+    $current_path = \Drupal::service('path.current')->getPath();
+    #$current_path_alias = \Drupal::service('path.alias_manager')->getAliasByPath($current_path);
+    $current_uri = \Drupal::request()->getRequestUri();
+
+    $variables['current_path'] = $current_path;
+    $variables['current_uri']  = $current_uri;
+    
+    $parameters = \Drupal::routeMatch()->getParameters();
+    $arg0 = \Drupal::routeMatch()->getParameter('arg_0');
+    
+    $variables['route_name'] = \Drupal::routeMatch()->getRouteName();    
+    $variables['currentusername'] = \Drupal::currentUser()->getUsername();
+}
+
+/**
+ * Implements hook_preprocess_menu_local_task().
+ */
+function peco_preprocess_menu_local_task(&$variables) {
+  /** @var \Drupal\Core\Url $url */
+  $url = $variables['link']['#url'];
+  #if ($url instanceof \Drupal\Core\Url && $url->getRouteName() == 'entity.node.custom') {
+    $variables['link']['#options']['attributes']['class'][] = 'nav-link';
+  #}
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function peco_form_alter(&$form,$form_state, $form_id) {
+    #echo "form: $form_id";
+    if (strpos($form_id, 'webform_submission') !== false) {
+        #echo "Hello";
+       #echo "<pre>"; kint($form);
+    }
+}
+
+/**
+ * For Property - Space Available API
+ */
+function peco_preprocess_node(&$variables, $hook) {
+    // Space Available API call
+    $variables['view_mode'] = $variables['elements']['#view_mode'];
+    $variables['site_map'] = '';
+    $variables['prop_site_map_jsviewer'] = '';
+    
+    #echo "Mode:: {$variables['view_mode']}";
+    if ($variables['node']->getType() == 'properties' && $variables['view_mode'] == 'full'){
+        #kint($variables['node']);
+        #$view_mode = $variables['view_mode'];
+        #echo "Test: {$view_mode}";
+        #$con = $variables['node']->get('field_propertycapsule_id')->value;
+	 
+        if($variables['node']->get('field_propertycapsule_id') != ''){
+            $global_id = '5f1091fa4797d52eadd8ecf7a7585083';
+            $propertycapsule_id = $variables['node']->get('field_propertycapsule_id')->value;
+
+            $global_id_propertycapsule_id = "{$global_id}-{$propertycapsule_id}";
+            
+            // siteplan
+            $api_url = 'https://api.services.propertycapsule.com/api/property/'.$global_id_propertycapsule_id.'/plan';
+
+            $api_response = propertycapsule_api_call($api_url);
+            #echo "Site Plan Response::<pre>";print_r($api_response);echo "</pre>";#exit;
+
+            $variables['prop_site_map_jsviewer'] = isset($api_response[0]['jsViewer'])?$api_response[0]['jsViewer']:'';
+            $variables['prop_site_map_id'] = isset($api_response[0]['id'])?$api_response[0]['id']:'';
+            #$variables['site_map'] = $api_response[0]['heatMaps'][1]['image'];
+            #$variables['site_map1'] = $api_response[0]['heatMaps'][0]['image'];
+
+            // space available
+            $api_url = 'https://api.services.propertycapsule.com/api/property/'.$global_id_propertycapsule_id.'/space';
+            $api_response = propertycapsule_api_call($api_url);
+            #echo "Space Response::<pre>";print_r($api_response);echo "</pre>";#exit;
+
+            $variables['prop_space_available'] = isset($api_response[0])?$api_response:'';
+        }
+        $paragraph = $variables['node']->field_space_available->referencedEntities();
+        // echo "Space Response::<pre>";print_r($paragraph);echo "</pre>"; exit;
+        $space_avail_array = $current_space = $space_available = [];
+        $i = $j = 0;
+        foreach($paragraph as $key => $value){
+            // $text = \Drupal\paragraphs\Entity\Paragraph::load( $p['target_id']);
+            // $texts = $text->field_name->getValue();
+            $text_coming = $value->field_coming_available->getString();
+            $text_tenant_name = $value->field_tenant->getString();
+            $text_space_no = $value->field_space_number->getString();
+            $text_sqft = $value->field_sqft->getString();
+            $text_type = $value->field_priorttype->getString();
+            $text_tour_url = $value->field_360_tour->getString();
+            $available_array = ['AVAILABLE','LEASED/AVAILABLE'];
+            if(!in_array($text_tenant_name,$available_array)){
+                $current_space[$i]['coming_available'] = $text_coming;
+                $current_space[$i]['tenant_name'] = $text_tenant_name;
+                $current_space[$i]['space_no'] = $text_space_no;
+                $current_space[$i]['sqft'] = $text_sqft;
+                $current_space[$i]['type'] = $text_type;
+                $i++;
+            }
+            else {
+                if($text_type == 821){
+                    $medical = 1;
+                }
+                if($text_type == 819){
+                    $restaurant = 1;
+                }
+                if($text_type == 820){
+                    $salon = 1;
+                }
+                if($text_tour_url != ''){
+                    $icon360 = 1;
+                }
+                $space_available[$j]['coming_available'] = $text_coming;
+                $space_available[$j]['tenant_name'] = $text_tenant_name;
+                $space_available[$j]['space_no'] = $text_space_no;
+                $space_available[$j]['sqft'] = $text_sqft;
+                $space_available[$j]['type'] = $text_type;
+                $space_available[$j]['360_tour'] = $text_tour_url;
+                $j++;
+            }
+            $variables['current_tenant'] = isset($current_space)?$current_space:'';
+            $variables['space_available'] = isset($space_available)?$space_available:'';
+            $variables['medical'] = isset($medical)?$medical:'';
+            $variables['restaurant'] = isset($restaurant)?$restaurant:'';
+            $variables['salon'] = isset($salon)?$salon:'';
+            $variables['icon360'] = isset($icon360)?$icon360:'';
+            // echo "Space Response::<pre>";print_r($p);echo "</pre>"; exit;
+        }
+        #echo "Space Response::<pre>";print_r($space_available);echo "</pre>"; #exit;
+    }
+    // Space Available API call end
+    else if ($variables['node']->getType() == 'properties' && $variables['view_mode'] == 'list'){
+        $view_mode = $variables['node']->getType();
+        $arg2 = \Drupal::routeMatch()->getParameter('arg_2');
+        $current_uri = \Drupal::request()->query->get('use_type'); 
+        $arg2 = strtolower($arg2);
+            if($current_uri == 822 || $arg2 == 'retail' || $arg2 == 'Retail'){
+                $variables['prop_use_type_label'] = 'Retail Space for Lease';
+                $variables['image_alter'] = 'Retail Space for lease in';
+            }
+            else if($current_uri == 821 || $arg2 == 'medical' || $arg2 == 'Medical'){
+                $variables['prop_use_type_label'] = 'Medical Space for Lease';
+                $variables['image_alter'] = 'Medical Space for lease in';
+            }
+            else if($current_uri == 819 || $arg2 == 'restaurant' || $arg2 == 'Restaurant'){
+                $variables['prop_use_type_label'] = 'Restaurant Space for Lease';
+                $variables['image_alter'] = 'Restaurant Space for lease in';
+            }
+            else if($current_uri == 820 || $arg2 == 'salon' || $arg2 == 'Salon'){
+                $variables['prop_use_type_label'] = 'Salon Space for Lease';
+                $variables['image_alter'] = 'Salon Space for lease in';
+            }else{
+                $variables['prop_use_type_label'] = 'Retail Space for Lease';
+                $variables['image_alter'] = 'Retail Space for lease in';
+            }
+        #echo "Current uri: {$current_uri}";
+        #$variables['prop_use_type_label'] = 'Hello';
+    }
+}
+
+/**
+ * API - propertycapsule
+ * return response
+ * 
+ */
+function propertycapsule_api_call($api_url) {
+    if (empty($api_url) || $api_url == '') {
+        return false;
+    }
+    
+    $curl = curl_init();
+    curl_setopt_array($curl, array(
+      CURLOPT_URL => $api_url,
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_ENCODING => '',
+      CURLOPT_MAXREDIRS => 10,
+      CURLOPT_TIMEOUT => 0,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+      CURLOPT_CUSTOMREQUEST => 'GET',
+      CURLOPT_HTTPHEADER => array(
+        'key: 475e319c73cc8c47559c1b'
+      ),
+    ));
+
+    $response_json = curl_exec($curl);
+    $response = json_decode($response_json, true);
+    
+    curl_close($curl);
+    
+    #echo "Response::<pre>";print_r($response_prop);echo "</pre>";#exit;
+    return $response;
+}

@@ -1,0 +1,183 @@
+{#
+/**
+ * @file
+ * Default theme implementation to display a node.
+ *
+ * Available variables:
+ * - node: The node entity with limited access to object properties and methods.
+ *   Only method names starting with "get", "has", or "is" and a few common
+ *   methods such as "id", "label", and "bundle" are available. For example:
+ *   - node.getCreatedTime() will return the node creation timestamp.
+ *   - node.hasField('field_example') returns TRUE if the node bundle includes
+ *     field_example. (This does not indicate the presence of a value in this
+ *     field.)
+ *   - node.isPublished() will return whether the node is published or not.
+ *   Calling other methods, such as node.delete(), will result in an exception.
+ *   See \Drupal\node\Entity\Node for a full list of public properties and
+ *   methods for the node object.
+ * - label: The title of the node.
+ * - content: All node items. Use {{ content }} to print them all,
+ *   or print a subset such as {{ content.field_example }}. Use
+ *   {{ content|without('field_example') }} to temporarily suppress the printing
+ *   of a given child element.
+ * - author_picture: The node author user entity, rendered using the "compact"
+ *   view mode.
+ * - metadata: Metadata for this node.
+ * - date: Themed creation date field.
+ * - author_name: Themed author name field.
+ * - url: Direct URL of the current node.
+ * - display_submitted: Whether submission information should be displayed.
+ * - attributes: HTML attributes for the containing element.
+ *   The attributes.class element may contain one or more of the following
+ *   classes:
+ *   - node: The current template type (also known as a "theming hook").
+ *   - node--type-[type]: The current node type. For example, if the node is an
+ *     "Article" it would result in "node--type-article". Note that the machine
+ *     name will often be in a short form of the human readable label.
+ *   - node--view-mode-[view_mode]: The View Mode of the node; for example, a
+ *     teaser would result in: "node--view-mode-teaser", and
+ *     full: "node--view-mode-full".
+ *   The following are controlled through the node publishing options.
+ *   - node--promoted: Appears on nodes promoted to the front page.
+ *   - node--sticky: Appears on nodes ordered above other non-sticky nodes in
+ *     teaser listings.
+ *   - node--unpublished: Appears on unpublished nodes visible only to site
+ *     admins.
+ * - title_attributes: Same as attributes, except applied to the main title
+ *   tag that appears in the template.
+ * - content_attributes: Same as attributes, except applied to the main
+ *   content tag that appears in the template.
+ * - author_attributes: Same as attributes, except applied to the author of
+ *   the node tag that appears in the template.
+ * - title_prefix: Additional output populated by modules, intended to be
+ *   displayed in front of the main title tag that appears in the template.
+ * - title_suffix: Additional output populated by modules, intended to be
+ *   displayed after the main title tag that appears in the template.
+ * - view_mode: View mode; for example, "teaser" or "full".
+ * - teaser: Flag for the teaser state. Will be true if view_mode is 'teaser'.
+ * - page: Flag for the full page state. Will be true if view_mode is 'full'.
+ * - readmore: Flag for more state. Will be true if the teaser content of the
+ *   node cannot hold the main body content.
+ * - logged_in: Flag for authenticated user status. Will be true when the
+ *   current user is a logged-in member.
+ * - is_admin: Flag for admin user status. Will be true when the current user
+ *   is an administrator.
+ *
+ * @see template_preprocess_node()
+ *
+ * @todo Remove the id attribute (or make it a class), because if that gets
+ *   rendered twice on a page this is invalid CSS for example: two lists
+ *   in different view modes.
+ *
+ * @ingroup themeable
+ */
+#}
+<div class="row">
+  <div class="col-12 p-0 banner" style="background-image:url('/rockyridgetowncenter/sites/rockyridgetowncenter/files/inline-images/SalesOffers4-gradient.png')">
+    <span class="banner-title">Directory <br><small>{{ label }}</small></span>
+  </div>
+</div>
+
+<div class="container p-0 my-4 py-3 text-color text-center">
+  <div class="row justify-content-center">
+    <div class="col-md-8 store-single">
+      <div class="page-header w-100">
+        {%  set logo = content.field_logo_color_|render|trim|striptags %}
+        {% if logo != '' %}
+          {{ content.field_logo_color_}}
+        {% else %}
+          {{ label }}
+        {% endif %}
+      </div>
+        {% set website = content.field_website.0|render|striptags %}
+        <a class="mb-3 d-inline-block" href="{{ website }}">{{ content.field_website | raw}}</a>
+        
+        {{ content.body | raw }}
+        </div>
+        <div class="col-md-12 store-single">
+        <div class="row justify-content-center">
+          <div class="col background-color-setter-lighter border-color-setter-lighter store-sales-cta p-0 col-sm-6 col-xs-12">
+            <a href="/rockyridgetowncenter/sales-offers/"><h2>Sales &amp; Offers</h2></a>
+          </div>
+        </div>
+        
+        <div class="store-info row">
+          <div class="icon-container">
+          {% set phone_number = content.field_phone_number|render|trim|striptags %}
+          {% set location = content.field_location|render|trim|striptags %}
+            {% if phone_number != '' %}
+            <div class="col-sm-3 col-xs-12">
+              <a class="font-color-setter phone-link" href="tel:{{ phone_number }}">
+                <i class="fa fa-phone" aria-hidden="true"></i>
+                <p class="font-color-setter">{{ content.field_phone_number }}</p>
+              </a>
+            </div>
+            {% endif %}
+            {% if location != '' %}
+            <div class="col-sm-4 col-xs-12">
+              <a href="#" target="_blank" class="printable-directory-link">
+                <i class="fa fa-map-marker" aria-hidden="true"></i>
+                <p class="font-color-setter">{{ content.field_location }}</p>
+              </a>
+            </div>
+            {% endif %}
+		    </div>
+	  </div>
+      <div class="store-hour">
+        <p>Hours</p>
+        {% set day = now|date('w') %}
+        {% set weekStart = now|date_modify("-#{day-1} days")|date('M jS') %}
+        {% set weekEnd = now|date_modify("+#{7-day} days")|date('-jS') %}
+        <div class="d-inline-block w-100 hourscolor">
+          <div class="d-inline-block">{{ weekStart }}{{ weekEnd }} /</div>
+          <div class="d-inline-block">{{ content.field_hours[0] | raw }}</div>
+        </div>
+      </div>
+      {%  set facebook = content.field_facebook|render|trim|striptags %}
+      {%  set twitter = content.field_twitter|render|trim|striptags %}
+      {%  set instagram = content.field_instagram|render|trim|striptags %}
+      {%  set pinterest = content.field_pinterest|render|trim|striptags %}
+      <div class="social-scene row justify-content-center">
+      {% if (facebook or twitter or instagram or pinterest) != ''%}
+				<div class="col-12">
+					<h2 class="font-color-setter">
+						The <b>Social Scene</b>
+					</h2>
+				</div>
+        {% endif %}
+        {% if facebook != '' %}
+            <div class="col-md-2 col-12">
+              <a href="{{facebook}}" target="_blank" title="facebook">
+                <i class="fab fa-facebook-f fa-5x" aria-hidden="true"></i>
+              </a>
+					</div>
+        {% endif %}
+
+        {% if twitter != '' %}
+          <div class="col-md-2 col-12">
+						<a href="{{twitter}}" target="_blank" title="twitter">
+							<i class="fab fa-twitter fa-5x" aria-hidden="true"></i>
+						</a>
+					</div>
+        {% endif %}
+
+        {% if instagram != '' %}
+          <div class="col-md-2 col-12">
+						<a href="{{instagram}}" target="_blank" title="instagram">
+							<i class="fab fa-instagram fa-5x" aria-hidden="true"></i>
+						</a>
+					</div>
+        {% endif %}
+
+        {% if pinterest != '' %}
+          <div class="col-md-2 col-12">
+						<a href="{{pinterest}}" target="_blank" title="pinterest">
+							<i class="fab fa-pinterest fa-5x" aria-hidden="true"></i>
+						</a>
+					</div>
+        {% endif %}
+        </div>
+    </div>
+  </div>
+</div>
+

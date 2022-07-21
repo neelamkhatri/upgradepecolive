@@ -1,0 +1,69 @@
+{#
+/**
+ * @file
+ * Default theme implementation to display a block.
+ *
+ * Available variables:
+ * - plugin_id: The ID of the block implementation.
+ * - label: The configured label of the block if visible.
+ * - configuration: A list of the block's configuration values.
+ *   - label: The configured label for the block.
+ *   - label_display: The display settings for the label.
+ *   - provider: The module or other provider that provided this block plugin.
+ *   - Block plugin specific settings will also be stored here.
+ * - content: The content of this block.
+ * - attributes: array of HTML attributes populated by modules, intended to
+ *   be added to the main container tag of this template.
+ *   - id: A valid HTML ID and guaranteed unique.
+ * - title_attributes: Same as attributes, except applied to the main title
+ *   tag that appears in the template.
+ * - content_attributes: Same as attributes, except applied to the main content
+ *   tag that appears in the template.
+ * - title_prefix: Additional output populated by modules, intended to be
+ *   displayed in front of the main title tag that appears in the template.
+ * - title_suffix: Additional output populated by modules, intended to be
+ *   displayed after the main title tag that appears in the template.
+ *
+ * @see template_preprocess_block()
+ *
+ * @ingroup themeable
+ */
+#}
+<div{{ attributes }}>
+    {{ title_prefix }}
+    {% if label %}
+        <h3{{ title_attributes }}>{{ label }}</h3>
+    {% endif %}
+    {{ title_suffix }}
+    {% block content %}
+        
+        <div class="row pb-5">
+            <div class="search-banner-img-left col-3 p-0">
+                {#<img src="{{ theme_images_path }}search-left.png" class="w-100">#}
+            </div>
+            <div class="banner-content col common-text py-5">
+                <div class="text-align-center banner-search-inner">
+                    <div class="form-inline">
+                        {{ content }}
+                    </div>
+                </div>
+            </div>
+            <div class="search-banner-img-right col-3 p-0">
+                {#<img src="{{ theme_images_path }}search-right.png" class="w-100">#}
+            </div>
+        </div>
+        
+    {% endblock %}
+</div>
+<div class="banner-img-left topbuildAnimation topbuildAnimationInv mobilehide w-100 p-0">
+    <article class="content animation-element in-view">
+        <div class="rock-5">
+            <img class="float-left" src="{{ theme_images_path }}bannerImages/topLeftInnerPage.png" />
+            <img class="float-right" src="{{ theme_images_path }}bannerImages/topRightInnerPage.png" />
+        </div>
+
+        <div class="rock-6">
+            <img class="float-left" src="{{ theme_images_path }}bannerImages/bottomLeftInnerPage.png" />
+            <img class="float-right" src="{{ theme_images_path }}bannerImages/bottomRightInnerPage.png" /></div>
+    </article>
+</div>

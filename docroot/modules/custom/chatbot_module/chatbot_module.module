@@ -1,0 +1,159 @@
+<?php
+
+// require drupal_get_path('module', 'chatbot_module').'/vendor/autoload.php';
+
+
+// $module_handler = \Drupal::service('module_handler');
+//     $module_path = $module_handler->getModule('chatbot_module')->getPath();
+//     $chatbot_module_path = drupal_get_path('module', 'chatbot_module');
+//     echo $chatbot_module_path;
+
+function chatbot_dialogflow(){
+        $query = \Drupal::entityQuery('node');
+        $query->condition('status', 1);
+        $query->condition('type', 'agents');
+        $nids = $query->execute();
+        
+        $nodes =  \Drupal\node\Entity\Node::loadMultiple($nids);
+        
+        #$this->print_data($nodes);
+        $result = array();
+        
+        if (!empty($nodes)) {
+            foreach ($nodes AS $id=>$node) {
+                $title = $node->getTitle();
+                #echo "<br>$id Status:<pre>";print_r($node);echo $node->getId();exit;
+                $result[$title] = $title;
+            }
+        }
+    return $result;
+
+}
+
+function count_properties($place){
+    $query = \Drupal::entityQuery('node');
+    $query->condition('status', 1);
+    $query->condition('type', 'properties');
+    $query->condition('field_state.entity:taxonomy_term.name', $place, '=');
+    // $query->condition('field_director.entity:node.field_birth_year', '1981');
+    $nids = $query->execute();
+        
+    $nodes =  \Drupal\node\Entity\Node::loadMultiple($nids);
+    
+
+    $result = array();
+        
+        if (!empty($nodes)) {
+            foreach ($nodes AS $id=>$node) {
+                $title = $node->getTitle();
+                #echo "<br>$id Status:<pre>";print_r($node);echo $node->getId();exit;
+                $result[$title] = $title;
+            }
+        }
+    return count($result);
+
+    // $terms = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties([
+    //     'vid' => 'countries_state_and_city'
+    // ]);
+
+    $vid = 'countries_state_and_city';
+        $terms =\Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadTree($vid);
+        foreach ($terms as $term) {
+        $term_data[] = array(
+        'id' => $term->tid,
+        'name' => $term->name
+        );
+    }
+
+    return $terms;
+        
+    $nodes =  \Drupal\node\Entity\Node::loadMultiple($nids);
+
+    $result = array();
+        
+    if (!empty($nodes)) {
+        foreach ($nodes AS $id=>$node) {
+            $title = $node->getTitle();
+            #echo "<br>$id Status:<pre>";print_r($node);echo $node->getId();exit;
+            $result[$title] = $title;
+        }
+    }
+    return $result;
+}
+
+function space_properties($place){
+    $query = \Drupal::entityQuery('node');
+    $query->condition('status', 1);
+    $query->condition('type', 'properties');
+    $query->condition('field_state.entity:taxonomy_term.name', $place, '=');
+    $nids = $query->execute();
+    $nodes =  \Drupal\node\Entity\Node::loadMultiple($nids);
+    
+
+    $result = array();
+    $message = '';
+    if (!empty($nodes)) {
+        $message = "Phillips Edison and company has ". count($nodes) ." shopping centers in ". $place . " with available space. \n";
+        // $message = "We have ". count($nodes) ." available spaces in ". $place . ". Here are some suggestions that you may like: \n";
+        // echo "<br>Status:<pre>";print_r($nodes);exit;
+        foreach ($nodes AS $id=>$node) {
+            // echo "<br>Status:<pre>";print_r($node->get('field_space_available')->getValue());exit;
+            $message .= '- '.$node->getTitle() . " (". $node->field_city->entity->label() . ", " . $place . ")";
+            $message .= "\n" ;
+            $title = $node->getTitle();
+            // echo $id. '<br>';
+            // print_r( $node->field_city->entity->label()); '<br>';
+            // echo "<br>$id Status:<pre>";print_r($node);echo $node->getId();exit;
+            $result[$title] = $title;
+        }
+    }
+    return $message;
+}
+
+function space_available($place){
+
+    $query = \Drupal::entityQuery('node');
+    $query->condition('status', 1);
+    $query->condition('type', 'properties');
+    $query->condition('field_state.entity:taxonomy_term.name', $place, '=');
+    $query->condition('field_space_available.entity:paragraph.field_coming_available', '1');
+    // $query->condition('field_agents.entity:paragraph.field_agent_name', '1');
+    // $query->condition('field_director.entity:node.field_birth_year', '1981');
+    $nids = $query->execute();
+        
+    $nodes =  \Drupal\node\Entity\Node::loadMultiple($nids);
+    
+    
+    $result = array();
+    // echo "<br>Status:<pre>";print_r($nodes);exit;
+        if (!empty($nodes)) {
+            foreach ($nodes AS $id=>$node) {
+                $title = $node->getTitle();
+                // echo "<br>Status:<pre>";print_r($node->field_agents->entity->field_agent_name->entity->toArray());exit;
+                #echo "<br>$id Status:<pre>";print_r($node);echo $node->getId();exit;
+                $result[$title]['name'] = $title;
+                $result[$title]['agents'] = $node->field_agents->entity->field_agent_name->entity->label();
+                $result[$title]['agent_email'] = $node->field_agents->entity->field_agent_name->entity->get('field_agentemail')->value;
+                $result[$title]['city'] = $node->field_city->entity->label();
+                $result[$title]['slug'] = create_slug($title);
+                $result[$title]['agent_image'] = file_create_url($node->field_agents->entity->field_agent_name->entity->get('field_agent_image')->entity->uri->value);
+            }
+            // exit;
+        }
+    return $result;
+
+    
+}
+function create_slug($string){
+    $slug=preg_replace('/[^A-Za-z0-9-]+/', '-', $string);
+    return strtolower($slug);
+}
+// function processMessage($update) {
+//     sendMessage(array(
+//         "source" => $update["queryResult"]["intent"]["displayName"],
+//         "speech" => "Hello from webhook",
+//         "fulfillmentText" => "Hello from webhook",
+//         "outputContexts" => array()
+//     ));
+// }
+

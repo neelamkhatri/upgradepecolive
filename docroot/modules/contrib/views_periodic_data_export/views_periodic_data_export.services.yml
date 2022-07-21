@@ -1,0 +1,6 @@
+services:
+  views_periodic_data_export.views_periodic_data_export_service:
+    class: Drupal\views_periodic_data_export\Services\ViewsPeriodicDataExportService
+    arguments: ['@messenger']
+
+

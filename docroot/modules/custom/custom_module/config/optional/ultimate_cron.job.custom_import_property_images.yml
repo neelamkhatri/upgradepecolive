@@ -1,0 +1,19 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - custom_module
+title: 'Import Property From CSV - Images'
+id: custom_import_property_images
+weight: 0
+module: custom_module
+callback: custom_module_import_property_images_callback
+scheduler:
+  id: simple
+  configuration:
+    rules:
+      - '0+@ 0 * * *'
+launcher:
+  id: serial
+logger:
+  id: database

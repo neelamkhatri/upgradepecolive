@@ -1,0 +1,191 @@
+{#
+/**
+ * @file
+ * Bartik's theme implementation to display a single page.
+ *
+ * The doctype, html, head and body tags are not in this template. Instead they
+ * can be found in the html.html.twig template normally located in the
+ * core/modules/system directory.
+ *
+ * Available variables:
+ *
+ * General utility variables:
+ * - base_path: The base URL path of the Drupal installation. Will usually be
+ *   "/" unless you have installed Drupal in a sub-directory.
+ * - is_front: A flag indicating if the current page is the front page.
+ * - logged_in: A flag indicating if the user is registered and signed in.
+ * - is_admin: A flag indicating if the user has permission to access
+ *   administration pages.
+ *
+ * Site identity:
+ * - front_page: The URL of the front page. Use this instead of base_path when
+ *   linking to the front page. This includes the language domain or prefix.
+ *
+ * Page content (in order of occurrence in the default page.html.twig):
+ * - node: Fully loaded node, if there is an automatically-loaded node
+ *   associated with the page and the node ID is the second argument in the
+ *   page's path (e.g. node/12345 and node/12345/revisions, but not
+ *   comment/reply/12345).
+ *
+ * Regions:
+ * - page.header: Items for the header region.
+ * - page.highlighted: Items for the highlighted region.
+ * - page.primary_menu: Items for the primary menu region.
+ * - page.secondary_menu: Items for the secondary menu region.
+ * - page.featured_top: Items for the featured top region.
+ * - page.content: The main content of the current page.
+ * - page.sidebar_first: Items for the first sidebar.
+ * - page.sidebar_second: Items for the second sidebar.
+ * - page.featured_bottom_first: Items for the first featured bottom region.
+ * - page.featured_bottom_second: Items for the second featured bottom region.
+ * - page.featured_bottom_third: Items for the third featured bottom region.
+ * - page.footer_first: Items for the first footer column.
+ * - page.footer_second: Items for the second footer column.
+ * - page.footer_third: Items for the third footer column.
+ * - page.footer_fourth: Items for the fourth footer column.
+ * - page.footer_fifth: Items for the fifth footer column.
+ * - page.breadcrumb: Items for the breadcrumb region.
+ *
+ * @see template_preprocess_page()
+ * @see html.html.twig
+ */
+#}
+{{ attach_library('peco/slick') }}
+{{ attach_library('peco/scroll') }}
+
+<!---header-start-->
+<header class="nav_fixed shadow-sm">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="container p-0">
+                <nav class="navbar navbar-expand-lg py-0 navbar-light">
+                    <a href="{{ url('<front>') }}" class="logo navbar-brand"><img src="{{ logopath }}"></a>
+
+                    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+
+                    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                        <div class="row m-0 w-100">
+
+                            {{ page.top_menu }}
+
+                        </div>
+                    </div>
+                </nav>
+            </div>            
+        </div>
+    </div>
+
+    <div class="container-fluid overflow-hidden">
+
+        <div class="scrollContent">
+            <section id="titlechart">
+
+                <script>
+
+                    // init controller
+                    //var controller = new ScrollMagic.Controller();
+                </script>
+            </section>        
+            <div class="spacer s_viewport"></div>
+        </div>
+
+        <div class="row">
+
+            <div class="banner-img-left homeAnimation mobilehide col-12 p-0" style="position: relative;">
+                <article class="content animation-element banner-animation">
+                    <div class="rock-1">
+                        <img class="float-left" src="{{ theme_images_path }}bannerImages/topLeftbanner.png">
+                        <img class="float-right" src="{{ theme_images_path }}bannerImages/topRightbanner.png">
+                    </div>
+                    <div class="rock-2 banner-middle">
+                        <img class="float-left" src="{{ theme_images_path }}bannerImages/middleLeftbanner.png">
+                        <img class="float-right" src="{{ theme_images_path }}bannerImages/middleRightbanner.png">                       
+                    </div>
+                    <div class="rock-3">
+                        <img class="float-left" src="{{ theme_images_path }}bannerImages/bottomLeftbanner.png">
+                        <img class="float-right" src="{{ theme_images_path }}bannerImages/bottomRightbanner.png">
+                    </div>
+                </article>                    
+            </div>
+            <div class="banner-img-left col-3 p-0"></div>
+            <div class="banner-content col">
+
+                {{ page.property_search }}
+
+            </div>
+            <div class="banner-img-right col-3 p-0"></div>
+        </div>
+
+        {{ page.header }}
+
+    </div>
+</header>
+        
+<div class="main overflow-hidden">
+    {{ page.content }}
+</div>
+
+<footer>
+    {{ drupal_entity('block', 'chatbot') }}
+    <div class="container">
+        <div class="row">
+        <div class="col-lg-4 footerlogo pr-5 order-2 order-lg-1">
+             {{ drupal_entity('block', 'footerblock1') }}
+             </div>
+            <div class="col-lg-8 order-1 order-lg-2">
+                <div class="row" id="accordion">                    
+                    <div class="col-lg-4 pr-5">
+                        <h3 class="mobilehide">Navigation</h3>
+                        <h3 class="mobileShow collapsed" data-toggle="collapse" data-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">Navigation</h3>
+                   
+                            <ul id="collapseOne" class="collapse footerNav" aria-labelledby="headingOne" data-parent="#accordion">
+                                        {# Get menu items #}
+                                        {% set items_last = simplify_menu('footer') %}
+
+                                {# Iterate menu tree #}
+                                {% for menu_item in items_last.menu_tree %}
+
+                                    <li><a href="{{menu_item.url}}"> 
+                                            {{menu_item.text}}
+                                        </a></li>
+                                    {% endfor %}
+
+                            </ul>
+
+                    </div>                  
+                     {{ drupal_entity('block', 'footerblock2') }}                        
+                   
+                     <div class="col-lg-4">
+                       {{ drupal_entity('block', 'peco_search') }}  
+
+                       <ul class="list-unstyled w-100 text-center row m-0 justify-content-between footer-social">
+                                        {# Get menu items #}
+                                        {% set items_last = simplify_menu('social') %}
+                                     
+                          {{ menus.menu_links(items, attributes, 0) }}
+                                {# Iterate menu tree #}
+                                {% for menu_item in items_last.menu_tree %}
+
+                                    <li class="nav-item d-inline-block col p-2 mt-3 w-auto">
+                                         {% set menu_icon_path = 'public://menu_icons/'~menu_item.text~'.svg' %}
+                                    <a class="nav-item nav-link  p-0" href="{{menu_item.url}}" target="_blank"> 
+                                        <img src="{{ file_url(menu_icon_path)}}" alt="{{menu_item.text}}" width="26">
+                                    </a>
+                                     </li>
+                                    {% endfor %}
+
+                            </ul>
+                     </div>
+                   
+
+                </div>
+            </div>
+           
+                {{ drupal_entity('block', 'footerblockspace') }}      
+           
+        </div>
+    </div>
+
+</footer>

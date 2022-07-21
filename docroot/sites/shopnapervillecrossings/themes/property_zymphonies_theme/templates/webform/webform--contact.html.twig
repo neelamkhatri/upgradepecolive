@@ -1,0 +1,50 @@
+{{ element.elements.description }}
+<div class="container p-0 join-club-form text-color">
+<h3>Contact Us</h3>
+<form{{ attributes.addClass('mt-1') }}>
+    {{ title_prefix }}
+    {#{ children }#}
+    {#{ element.elements|without('description') }#}
+    {% if element.confirmation %}
+        {{ children }}
+    {% endif %}
+    {% if element.status_messages %}
+        {{ element.status_messages }}
+    {% endif %}
+    {{ element.progress }}
+    {{ element.form_token }}
+    {{ element.form_build_id }}
+    {{ element.form_id }}
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group">
+            {{ element.elements.name }}
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group">
+            {{ element.elements.last_name }}
+            </div>
+        </div>
+    </div>
+    <div class="row">    
+        <div class="col-md-6">
+            <div class="form-group">
+            {{ element.elements.email }}
+            </div>
+        </div>
+    </div>
+    <div class="row">   
+    <div class="col-md-12">
+        <div class="form-group">
+        {{ element.elements.message }}
+        </div>
+    </div>
+    </div>
+    
+    {{ element.elements.captcha }}
+  
+    {{ element.elements.actions }}
+    {{ title_suffix }}
+</form>
+</div>

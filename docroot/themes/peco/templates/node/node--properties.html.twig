@@ -1,0 +1,613 @@
+{#
+/**
+ * @file
+ * Default theme implementation to display a node.
+ *
+ * Available variables:
+ * - node: The node entity with limited access to object properties and methods.
+ *   Only method names starting with "get", "has", or "is" and a few common
+ *   methods such as "id", "label", and "bundle" are available. For example:
+ *   - node.getCreatedTime() will return the node creation timestamp.
+ *   - node.hasField('field_example') returns TRUE if the node bundle includes
+ *     field_example. (This does not indicate the presence of a value in this
+ *     field.)
+ *   - node.isPublished() will return whether the node is published or not.
+ *   Calling other methods, such as node.delete(), will result in an exception.
+ *   See \Drupal\node\Entity\Node for a full list of public properties and
+ *   methods for the node object.
+ * - label: (optional) The title of the node.
+ * - content: All node items. Use {{ content }} to print them all,
+ *   or print a subset such as {{ content.field_example }}. Use
+ * {{ content|without('field_example') }} to temporarily suppress the printing
+ *   of a given child element.
+ * - author_picture: The node author user entity, rendered using the "compact"
+ *   view mode.
+ * - metadata: Metadata for this node.
+ * - date: (optional) Themed creation date field.
+ * - author_name: (optional) Themed author name field.
+ * - url: Direct URL of the current node.
+ * - display_submitted: Whether submission information should be displayed.
+ * - attributes: HTML attributes for the containing element.
+ *   The attributes.class element may contain one or more of the following
+ *   classes:
+ *   - node: The current template type (also known as a "theming hook").
+ *   - node--type-[type]: The current node type. For example, if the node is an
+ *     "Article" it would result in "node--type-article". Note that the machine
+ *     name will often be in a short form of the human readable label.
+ *   - node--view-mode-[view_mode]: The View Mode of the node; for example, a
+ *     teaser would result in: "node--view-mode-teaser", and
+ *     full: "node--view-mode-full".
+ *   The following are controlled through the node publishing options.
+ *   - node--promoted: Appears on nodes promoted to the front page.
+ *   - node--sticky: Appears on nodes ordered above other non-sticky nodes in
+ *     teaser listings.
+ *   - node--unpublished: Appears on unpublished nodes visible only to site
+ *     admins.
+ * - title_attributes: Same as attributes, except applied to the main title
+ *   tag that appears in the template.
+ * - content_attributes: Same as attributes, except applied to the main
+ *   content tag that appears in the template.
+ * - author_attributes: Same as attributes, except applied to the author of
+ *   the node tag that appears in the template.
+ * - title_prefix: Additional output populated by modules, intended to be
+ *   displayed in front of the main title tag that appears in the template.
+ * - title_suffix: Additional output populated by modules, intended to be
+ *   displayed after the main title tag that appears in the template.
+ * - view_mode: View mode; for example, "teaser" or "full".
+ * - teaser: Flag for the teaser state. Will be true if view_mode is 'teaser'.
+ * - page: Flag for the full page state. Will be true if view_mode is 'full'.
+ * - readmore: Flag for more state. Will be true if the teaser content of the
+ *   node cannot hold the main body content.
+ * - logged_in: Flag for authenticated user status. Will be true when the
+ *   current user is a logged-in member.
+ * - is_admin: Flag for admin user status. Will be true when the current user
+ *   is an administrator.
+ *
+ * @see template_preprocess_node()
+ *
+ * @todo Remove the id attribute (or make it a class), because if that gets
+ *   rendered twice on a page this is invalid CSS for example: two lists
+ *   in different view modes.
+ *
+ * @ingroup themeable
+ */
+#}
+{% if view_mode == 'teaser' %}
+
+	<article{{attributes}}>
+
+		<div{{content_attributes}}> {{ content.field_identifier }} {{ content.field_agents }} {{ content|without('field_agents') }}
+		</div>
+
+	</article>
+{% elseif view_mode == 'list' %}
+	{% set prop_address = content.field_property_address|render|trim|striptags ~ "<br> " ~ content.field_city|render|trim|striptags ~ ", " ~ content.field_state|render|trim|striptags ~ " " ~ content.field_zip|render|trim|striptags %}
+	{% set prop_address_label = prop_address|replace({' , ':' '}) %}
+	{% set prop_address = prop_address_label|replace({'<br> ':', '}) %}
+
+	<div{{attributes.addClass('prop-block card overflow-hidden h-100 hidden1')}} data-nid="{{ node.id }}" data-city="{{ content.field_city|render|trim }}" data-latitude="{{ content.field_latitude|render|trim }}" data-longitude="{{ content.field_longitude|render|trim }}">
+		<div class="img-wrap card-header p-0 bg-transparent border-0">
+
+			{% set break = false %}
+			{% for i in content.field_property_image['#items']|keys if not break %}
+				{% set break = true %}
+				{% set img_uri = node.field_property_image[i].entity.fileuri %}
+				{% set image_alt = content.field_property_image[i]['#item'].alt %}
+				{% set img_alt = image_alter ~' '~ node.label ~', '~ content.field_city|render|trim|striptags ~', '~ content.field_state|render|trim|striptags ~' '~ '- 1' %}{#{ content.field_property_image[i] }#}
+				{#% 
+								                    set imagestyle = {
+								                        '#theme':      'image_style',
+								                        '#style_name': 'property_list_thumb',
+								                        '#uri':        img_uri,
+								                        '#alt':        img_alt,
+								                        '#attributes': { class: 'img-fluid w-100' },
+								                    } 
+								               %} {{ imagestyle }#}
+				{#<img class="img-fluid w-100" src="{{ file_url(img_uri) }}" alt="{{ img_alt }}">#}
+					<span class="prop-image-url hidden" href="{{ url }}" rel="bookmark"> {{ file_url(img_uri) }}</span>
+				<a class="prop-image hidden1" href="{{ url }}" rel="bookmark">{{ drupal_image(img_uri, 'property_image_crop', {alt: img_alt|t, title: image_alt|t, class:'img-fluid w-100'|t}) }}</a>
+			{% endfor %}
+		</div>
+
+		<div class="card-body">
+			<h5 class="use-type">{{ prop_use_type_label }}</h5>
+			<h4 class="prop-title">
+				<a href="{{ url }}" rel="bookmark">{{ label }}</a>
+			</h4>
+			<h5 class="address" address="{{ prop_address }}">{{ prop_address_label|raw }}</h5>
+			<h5>MAJOR TENANTS:</h5>
+			{#{ content.field_space_available }#}
+
+			{% set anchor_tenants = {} %}
+			{% for key,value in node.field_space_available.value %}
+				{% set anchor =  content.field_space_available[key]['#paragraph'].field_anchor.value %}
+				{% set tenant =  content.field_space_available[key]['#paragraph'].field_tenant.value %}
+
+				{% if anchor == '1' %}
+					{% set anchor_tenants = anchor_tenants|merge([tenant]) %}
+				{% endif %}
+			{% endfor %}
+
+			{% if anchor_tenants|length > 0  %}
+				<p>{{ anchor_tenants|join(', ') }}</p>
+			{% endif %}
+		</div>
+	</div>
+{% elseif view_mode == 'header_block' %}
+
+	<!-- Header Section -->
+	{% set prop_address = content.field_property_address|render|trim|striptags ~ ", " ~ content.field_city|render|trim|striptags ~ ", " ~ content.field_state|render|trim|striptags ~ " " ~ content.field_zip|render|trim|striptags %}
+	{% set prop_address = prop_address|replace({' , ':' '}) %}
+	<div class="container-fluid overflow-hidden">
+		<div class="row">
+			<div class="search-details-img col-3 p-0"></div>
+			<div class="col">
+				<div class="row">
+					<div class="col-md-5 text-right prop-details pr-md-5 primary_leasing_contact">
+						<h1>{{ label }}</h1>
+						{#{ content.field_property_address|render|trim|striptags }#}
+						<a class="map-link" href="http://maps.google.com/maps?f=d&amp;source=s_d&amp;daddr={{ prop_address }}" target="_blank">
+							<h2>{{ prop_address }}</h2>
+						</a>
+						{#% if content.field_property_address.0 != '' %}
+												                            <a class="map-link" href="http://maps.google.com/maps?f=d&amp;source=s_d&amp;daddr={{ prop_address }}" target="_blank"><img src="{{ theme_images_path }}map-pin.png" class="" width="5%"></a>
+												                        {% endif %#}
+
+						{% if content.field_metadescription is not empty %}
+							<p>{{ content.field_metadescription }}</p>
+						{% endif %} {{ content.field_agents.0 }}
+					</div>
+					<div class="col-md-7 pl-md-4 prop-slider pr-0">
+						<ul class="list-unstyled">
+							<li>
+								<a href="#sa">SPACE AVAILABLE</a>
+							</li>
+							<li>
+								<a href="#sp">SITE PLAN</a>
+							</li>
+							<li>
+								<a href="#ph">MARKETING PACKAGE</a>
+							</li>
+							<li>
+								<a href="#ph">PROPERTY HIGHLIGHTS</a>
+							</li>
+							<li>
+								<a class="map-link" href="http://maps.google.com/maps?f=d&amp;source=s_d&amp;daddr={{ prop_address }}" target="_blank">
+									MAP
+								</a>
+							</li>
+						</ul>
+
+						{% if node.field_property_image|length > 0 %}
+							<div id="carouselExampleIndicators" class="carousel slide" data-ride="carousel">
+								<div class="carousel-inner">
+									{#{ content.field_property_image }#}
+									{#% for image in content.field_property_image %} {{ image.content['#item'].alt }}
+																		                                    {% endfor %#}
+										{% for i in content.field_property_image['#items']|keys %}
+										{% set active_cls = '' %}
+											{% if i == 0 %}
+										{% set active_cls = 'active' %}
+										{% endif %}
+										{% set img_uri = node.field_property_image[i].entity.fileuri %}
+										{% set img_alt = content.field_property_image[i]['#item'].alt %}
+											<div
+											class="carousel-item {{ active_cls }}"> {#<img class="d-block w-100" src="{{ file_url(img_uri) }}" alt="{{ img_alt }}">#} {{ drupal_image(img_uri, '', {alt: img_alt|t, title: img_alt|t, class:'d-block w-100'|t}) }}
+										</div>
+									{% endfor %}
+								</div>
+								<ol class="carousel-indicators">
+									{% for i in content.field_property_image['#items']|keys %}
+										{% set active_cls = '' %}
+										{% if i == 0 %}
+											{% set active_cls = 'active' %}
+										{% endif %}
+										<li data-target="#carouselExampleIndicators" data-slide-to=" {{ i }}" class=" {{ active_cls }}"></li>
+									{% endfor %}
+								</ol>
+								<a class="carousel-control-prev" href="#carouselExampleIndicators" role="button" data-slide="prev">
+									<img src="{{ theme_images_path }}sliderArrowLeft.svg">
+								</a>
+								<a class="carousel-control-next" href="#carouselExampleIndicators" role="button" data-slide="next">
+									<img src="{{ theme_images_path }}sliderArrowRight.svg">
+								</a>
+							</div>
+						{% endif %}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="banner-img-left topbuildAnimation mobilehide w-100 p-0">
+		<article class="content in-view overflow-hidden">
+			<div class="rock-4">
+				<img class="float-left" src="{{ theme_images_path }}bannerImages/searchTopLeft.png"/>
+			</div>
+
+			<div class="rock-5">
+				<img class="float-left" src="{{ theme_images_path }}bannerImages/searchMiddleLeft.png"/>
+			</div>
+
+			<div class="rock-6">
+				<img class="float-left" src="{{ theme_images_path }}bannerImages/searchBottomLeft.png"/>
+			</div>
+		</article>
+	</div>
+	<!-- Header Section end -->
+
+{% else %}
+
+	<!-- Main content -->
+	<div{{attributes.addClass('main overflow-hidden m-0')}}>
+		<div{{content_attributes.addClass('container-fluid overflow-hidden leasing')}}>
+			{#{ content|without('body')|without('field_agents')|without('field_property_image') }#}
+
+			<div class="row justify-content-between">
+				<div class="search-banner-img-left col-3 p-0"></div>
+				<div id="p-leasing" class="banner-content leasing-conent col py-5">
+					<div class="banner-search">
+						<div class="bs-text">Interested in leasing space<br>
+							<span>at this property?</span>
+						</div>
+						<p>Enter your email or phone number for one of our associates to get in contact with you regarding leasing opportunities at this property.</p>
+						{#{ drupal_entity('webform', 'property') }#2021-09-01#}
+						<!--[if lte IE 8]>
+												                        <script charset="utf-8" type="text/javascript" src="//js.hsforms.net/forms/v2-legacy.js"></script>
+												                        <![endif]-->
+						<script charset="utf-8" type="text/javascript" src="//js.hsforms.net/forms/v2.js"></script>
+						<script>
+							hbspt.forms.create({region: "na1", portalId: "20075307", formId: "994dfb12-aa46-4354-bccf-24f4af0c2ab1"});
+						</script>
+						{#<ul class="list-unstyled leasing-social">
+												                            <li class="socialText">share with <span>others</span></li>
+												                            <li><a><img src="{{ theme_images_path }}email-org.svg"></a></li>
+												                            <li><a><img src="{{ theme_images_path }}Facebook-org.svg"></a></li>
+												                            <li><a><img src="{{ theme_images_path }}Twitter-org.svg"></a></li>
+												                            <li><a><img src="{{ theme_images_path }}Linkedin-org.svg"></a></li>
+												                            <li><a><img src="{{ theme_images_path }}mobMsg.svg"></a></li>
+												                        </ul>#}
+					</div>
+				</div>
+				<div class="search-banner-img-right col-3 p-0"></div>
+			</div>
+		</div>
+
+		<div class="container-fluid overflow-hidden property-highlights">
+			<div id="ph" class="row justify-content-center">
+				<div class="banner-content property-highlights-conent col-12 py-5">
+					<div class="banner-search">
+						<div class="bs-text">
+							Property Highlights
+							{#{ content.field_overview['#title'] }#}
+							{% set break = false %}
+							{% for key,value in node.field_documents.value if not break %}
+								{% set doc_type =  content.field_documents[key]['#paragraph'].field_textdisplay.value %}
+								{% set doc_uri =  content.field_documents[key]['#paragraph'].field_uniquefilename.entity.fileuri %}
+
+								{% if doc_type == 'Marketing Package' and doc_uri != '' %}
+									{% set break = true %}
+									<a href="{{ file_url(doc_uri) }}" class="btn btn-primary" target="_blank">
+										DOWNLOAD MARKETING PACKAGE
+										<img src="{{ theme_images_path }}downloadIcon.svg">
+									</a>
+								{% endif %}
+							{% endfor %}
+						</div> {{ content.field_overview }}
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="container-fluid overflow-hidden site-plan" id="sp">
+			<div class="row justify-content-center">
+				<div class="banner-content col-12 py-5">
+					<div class="banner-search">
+						<div class="bs-text">Site Plan</div>
+						<div class="row" id="sa">
+							<div id="sitePlanLeft" class="col-md-12 sitePlanLeft-platWrapper">
+								<!-- site plan -->
+								{#{ content.field_documents }#}
+								{#{ node.field_documents.entity.field_textdisplay.value }#}
+								{#{ node.field_documents | renderThis('header_block') }#}
+								{#{ node.field_documents.view('site_plan') }#}
+								{% set site_plan_img_uri = false %}
+								{% set break = false %}
+									{% for key,value in node.field_documents.value if not break %}
+									{% set doc_type =  content.field_documents[key]['#paragraph'].field_textdisplay.value %}
+									{% set doc_uri =  content.field_documents[key]['#paragraph'].field_uniquefilename.entity.fileuri %}
+
+										{% if doc_type == 'Site Plan PNG' and doc_uri != '' %}
+										{% set site_plan_img_uri = doc_uri %}
+									{% set break = true %}
+										{#{ drupal_image(doc_uri, '', {alt: 'Site Plan'|t, title: 'Site Plan'|t, class:'d-block w-100'|t}) }#}
+									{% endif %}
+								{% endfor %}
+
+								{% set site_plan_uri = false %}
+								{% set break = false %}
+								{% for key,value in node.field_documents.value if not break %}
+									{% set doc_type =  content.field_documents[key]['#paragraph'].field_textdisplay.value %}
+									{% set doc_uri =  content.field_documents[key]['#paragraph'].field_uniquefilename.entity.fileuri %}
+
+									{% if doc_type == 'Site Plan' and doc_uri != '' %}
+										{% set site_plan_uri = doc_uri %}
+										{% set break = true %}
+										{#<a href="{{ file_url(doc_uri) }}" class="btn btn-primary">Download Site Plan</a>#}
+									{% endif %}
+								{% endfor %}
+
+								{% if site_plan_img_uri or site_plan_uri %}
+									{#<h3>Site Plan</h3>#}
+
+									{# {% if site_plan_img_uri %} {{ drupal_image(site_plan_img_uri, '', {alt: 'Site Plan'|t, title: 'Site Plan'|t, class:'img-fluid w-100 sitePlanMap'|t}) }}
+																		                                    {% endif %} #}
+
+
+										{% if site_plan_uri %}
+											<a href="{{ file_url(site_plan_uri) }}" class="btn btn-primary mt-5" target="_blank"> DOWNLOAD SITE PLAN
+											<img src="{{ theme_images_path }}downloadIcon.svg">
+										</a>
+									{% endif %}
+								{% endif %}
+								{# peco_preprocess_node - Space Available API #}
+								{% if prop_site_map_jsviewer != '' %}
+									<iframe id="jsviewer{{ prop_site_map_id }}" src="{{ prop_site_map_jsviewer }}" style="width:100% !important;height:600px;" allowfullscreen="true" scrolling="no" frameborder="0" class="w-100 border-0 jsviewer"></iframe>
+									{#<script>
+																		                                        $(".highlightJS").mouseover(function(){
+																		                                            var sitemapid = $(this).data("sitemapid");
+																		                                            var spaceId = $(this).data('spaceid');
+																		                                            var s = spaceId.toString();
+																		                                            document.getElementById('jsviewer' + sitemapid).contentWindow.PlanWidget.publicAPI.highlightSpaces(s);
+																		                                        });
+																		                                    </script>#}
+								{% endif %}
+								{#<img class="img-fluid w-100 sitePlanMap" src="{{site_map}}">#}
+								{# peco_preprocess_node - Space Available API end #}
+
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-md-12 my-5 p-0" id="sitePlanRight">
+								<div class="sitePlanList container">
+								{% if space_available|length > 0  %}
+									<div class="row content-desktop">
+										<div class="col-md-12">
+											<div class="card">
+												<div class="card-header pl-2" id="headingTwo2">
+													<h4>
+														Space Available
+													<span style="float: right; font-size: 18px; color: #0779bf; padding-top: 5px;">{% if medical == 1 %} <span style="padding: 5px;"><img width="22px" src="{{ theme_images_path }}Medical.png"> Medical </span> {% endif %}
+														{% if restaurant == 1 %} <img width="22px" src="{{ theme_images_path }}Restaurant.png"> Restaurant  {% endif %}
+														{% if salon == 1 %} <img width="22px" src="{{ theme_images_path }}Salon.png"> Salon  {% endif %}
+														{% if icon360 == 1 %} <img width="30px" src="{{ theme_images_path }}360_tour.png"> Click for virtual tour {% endif %}
+													</span>
+													</h4>
+												</div>
+												<div class="card-body">
+													<div class="table-responsive">
+														<table style="width: 100%;">
+															{% for row in range(0,1)|batch(2) %}
+																<thead>
+																	<tr style="border-bottom: 1px solid #ddd;">
+																		{% for key,value in row %}
+																			<th style="padding: 5px; font-size: 15px; width: 8%; text-align:center;">Space</th>
+																			<th style="padding: 5px; text-align:left; font-size: 15px; width: 30%;" >Tenant</th>
+																			<th style="padding: 5px; font-size: 15px; width: 12%;">SQ. FT.</th>
+																		{% endfor %}
+
+																	</tr>
+																</thead>
+															{% endfor %}
+															{% for row in space_available|batch(2) %}
+																<tr style="border-bottom: 1px solid #ddd;">
+																	{% for key,value in row %}
+																		<td style="padding: 5px; font-size: 15px; text-align:center;">{{ value['space_no'] }}</td>
+																		<td style="padding: 5px; text-align:left; font-size: 15px;">{{ value['tenant_name'] }} 
+																		{% if (value['type'] == 821) %}
+																			<img width="20px" src="{{ theme_images_path }}Medical.png">
+																		{% endif %}
+																		{% if (value['type'] == 819) %}
+																			<img width="20px" src="{{ theme_images_path }}Restaurant.png">
+																		{% endif %}
+																		{% if (value['type'] == 820) %}
+																			<img width="20px" src="{{ theme_images_path }}Salon.png">
+																		{% endif %}
+																		{% if (value['360_tour'] != '') %}
+																			<a href="{{ value['360_tour'] }}" target="_blank">
+																				<img class="mx-auto" width="28px" src="{{ theme_images_path }}360_tour.png">
+																			</a>
+																		{% endif %}
+																		</td>
+																		<td style="padding: 5px; font-size: 15px;">{{ value['sqft']|number_format }}</td>
+																	{% endfor %}
+																</tr>
+															{% endfor %}
+														</table>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+									<div class="row content-mobile">
+										<div class="col-md-12">
+											<div class="card">
+												<div class="card-header pl-2" id="headingTwo2">
+													<h4>
+														Space Available
+													</h4>
+												</div>
+												<div class="card-body">
+													<div class="table-responsive">
+														<table style="width: 100%;">
+																<thead>
+																	<tr style="border-bottom: 1px solid #ddd;">
+																			<th style="padding: 5px; font-size: 15px; width: 16%;">Space</th>
+																			<th style="padding: 5px; text-align:left; font-size: 15px; width: 60%;" >Tenant</th>
+																			<th style="padding: 5px; font-size: 15px; width: 24%;">SQ. FT.</th>
+																	</tr>
+																</thead>
+															{% for key,value in space_available %}
+																<tr style="border-bottom: 1px solid #ddd;">
+																	<td style="padding: 5px; font-size: 15px;">{{ value['space_no'] }}</td>
+																	<td style="padding: 5px; text-align:left; font-size: 15px;">{{ value['tenant_name'] }} 
+																	{% if (value['type'] == 821) %}
+																		<img width="20px" src="{{ theme_images_path }}Medical.png">
+																	{% endif %}
+																	{% if (value['type'] == 819) %}
+																		<img width="20px" src="{{ theme_images_path }}Restaurant.png">
+																	{% endif %}
+																	{% if (value['type'] == 820) %}
+																		<img width="20px" src="{{ theme_images_path }}Salon.png">
+																	{% endif %}
+																	{% if (value['360_tour'] != '') %}
+																		<a href="{{ value['360_tour'] }}" target="_blank">
+																			<img class="mx-auto" width="28px" src="{{ theme_images_path }}360_tour.png">
+																		</a>
+																	{% endif %}
+																	</td>
+																	<td style="padding: 5px; font-size: 15px;">{{ value['sqft']|number_format }}</td>
+																</tr>
+															{% endfor %}
+														</table>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+									{% endif %}
+									<br />
+									<div class="row content-desktop">
+										<div class="col-md-12">
+											<div class="card">
+												<div class="card-header pl-2" id="headingTwo2">
+													<h4>
+														Current Neighbors
+													</h4>
+												</div>
+												<div class="card-body">
+													<div class="table-responsive">
+														<table style="width: 100%;">
+															{% for row in range(0,1)|batch(2) %}
+																<thead>
+																	<tr style="border-bottom: 1px solid #ddd;">
+																		{% for key,value in row %}
+																			<th style="padding: 5px; font-size: 15px;  width: 8%; text-align:center;">Space</th>
+																			<th style="padding: 5px; text-align:left; font-size: 15px;  width: 30%;">Tenant</th>
+																			<th style="padding: 5px; font-size: 15px;  width: 12%;">SQ. FT.</th>
+																		{% endfor %}
+
+																	</tr>
+																</thead>
+															{% endfor %}
+															{% for row in current_tenant|batch(2) %}
+																<tr style="border-bottom: 1px solid #ddd;">
+																	{% for key,value in row %}
+																		<td style="padding: 5px; font-size: 15px; text-align:center;">{{ value['space_no'] }}
+																		</td>
+																		<td style="padding: 5px; text-align:left; font-size: 15px;">{{ value['tenant_name'] }}</td>
+																		<td style="padding: 5px; font-size: 15px;">{{ value['sqft']|number_format }}</td>
+																	{% endfor %}
+																</tr>
+															{% endfor %}
+														</table>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+									<div class="row content-mobile">
+										<div class="col-md-12">
+											<div class="card">
+												<div class="card-header pl-2" id="headingTwo2">
+													<h4>
+														Current Neighbors
+													</h4>
+												</div>
+												<div class="card-body">
+													<div class="table-responsive sitePlanListScroll">
+														<table style="width: 100%;">
+																<thead>
+																	<tr style="border-bottom: 1px solid #ddd;">
+																			<th style="padding: 5px; font-size: 15px;  width: 8%;">Space</th>
+																			<th style="padding: 5px; text-align:left; font-size: 15px;  width: 30%;">Tenant</th>
+																			<th style="padding: 5px; font-size: 15px;  width: 12%;">SQ. FT.</th>
+																	</tr>
+																</thead>
+															{% for key,value in current_tenant %}
+																<tr style="border-bottom: 1px solid #ddd;">
+																	<td style="padding: 5px; font-size: 15px;">{{ value['space_no'] }}
+																	</td>
+																	<td style="padding: 5px; text-align:left; font-size: 15px;">{{ value['tenant_name'] }}</td>
+																	<td style="padding: 5px; font-size: 15px;">{{ value['sqft']|number_format }}</td>
+																</tr>
+															{% endfor %}
+														</table>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+
+								</div>
+							</div>
+
+
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{#<div class="container-fluid overflow-hidden property-highlights pb-0">
+						            <div class="row justify-content-center">
+						                <div class="banner-content property-highlights-conent col-12 py-5">
+						                    <div class="banner-search">
+						                        <div class="bs-text">properties nearby</div>
+						                    </div>
+						                </div>
+						                <div class="col-12 p-0">
+						                    <img src="{{ theme_images_path }}propMap.jpg" class="img-fluid">
+						                </div>
+						            </div>            
+						        </div>#}
+
+			<div class="container-fluid overflow-hidden site-plan">
+				<div class="row justify-content-center">
+					<div class="banner-content col-12 py-5">
+						<div class="banner-search">
+							<div class="bs-text">Contact</div>
+							<div class="row justify-content-center">
+								<div class="col-12 bottomContact">
+									<div class="row justify-content-center">
+										<div id="callrail" class="hidden">
+											{%  set callrail_no = content.field_callrail|render|trim|striptags %}
+											{% if callrail_no != '' %}
+												<div class="mobile">
+													<i class="bi bi-mobile"></i>Mobile:
+													<a class="" href="tel:{{ callrail_no }}">{{ callrail_no }}</a>
+												</div>
+											{% endif %}
+										</div> {{ content.field_agents }}
+
+										<div class="col-md-3">
+											<ul class="list-unstyled">
+												<li class="contactText">
+													<p>Property Manager</p>
+													{#{ content.field_property_manager }#} {{ node.field_property_manager | renderThis('agent_property_manager') }}
+												</li>
+												<li class="contactImg"> {{ node.field_property_manager | renderThis('agent_image') }}
+													{#<img src="{{ theme_images_path }}contactImg.svg">#}
+												</li>
+											</ul>
+										</div>
+
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+		</div>
+		<!-- Main content end -->
+	{% endif %}

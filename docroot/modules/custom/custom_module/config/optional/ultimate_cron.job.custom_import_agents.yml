@@ -1,0 +1,21 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - custom_module
+title: 'Import Agents From CSV'
+id: custom_import_agents
+weight: 0
+module: custom_module
+#callback: custom_module_import_content_callback
+callback: custom_module_import_agents_callback
+#arguments: ['agents']
+scheduler:
+  id: simple
+  configuration:
+    rules:
+      - '*/15+@ * * * *'
+launcher:
+  id: serial
+logger:
+  id: database

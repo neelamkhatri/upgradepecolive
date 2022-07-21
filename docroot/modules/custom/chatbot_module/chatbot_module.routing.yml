@@ -1,0 +1,7 @@
+chatbot_module:
+  path: '/chatbot_module/chat'
+  defaults:
+    _controller: '\Drupal\chatbot_module\Controller\ChatController::index'
+    _title: 'Chatbot for dialogflow'
+  requirements:
+    _permission: 'access content'

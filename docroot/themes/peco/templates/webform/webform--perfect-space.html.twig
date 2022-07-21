@@ -1,0 +1,153 @@
+{#
+/**
+ * @file
+ * Theme implementation for a 'webform' element.
+ *
+ * This is an copy of the webform.html.twig theme_wrapper which includes the
+ * 'title_prefix' and 'title_suffix' variables needed for
+ * contextual links to appear.
+ *
+ * Available variables
+ * - attributes: A list of HTML attributes for the wrapper element.
+ * - children: The child elements of the webform.
+ * - title_prefix: Additional output populated by modules, intended to be
+ *   displayed in front of the main title tag that appears in the template.
+ * - title_suffix: Additional output populated by modules, intended to be
+ *   displayed after the main title tag that appears in the template.
+ *
+ * @see template_preprocess_webform()
+ * @see _webform_form_after_build()
+ *
+ * @ingroup themeable
+ */
+#}
+
+<div class="main overflow-hidden m-0">
+	<div class="container-fluid py-5">
+		<div class="row">
+			<div class="container">
+				<div class="row justify-content-center">
+					<div class="col-md-9 mb-3 text-center common-text signUp perfectSpaceUp">
+
+						<h2>Tell us a little more about yourself</h2>
+						<form{{attributes.addClass('mt-1')}}>
+							{{ title_prefix }}
+							{#{ children }#}
+							{#{ element.elements|without('description') }#}
+
+							{{ element.progress }}
+							{{ element.form_token }}
+							{{ element.form_build_id }}
+							{{ element.form_id }}
+
+								<div class="row"> <div class="col-md-6 form-group mb-4 pb-3">
+									<div class="input-group">
+										{{ element.elements.first_name }}
+										<div class="input-group-prepend input-group-prepend-pipe">
+											<span class="input-group-text p-0 search-pipe"></span>
+										</div>
+										{{ element.elements.last_name }}
+									</div>
+								</div>
+
+								<div class="col-md-6">
+									{{ element.elements.phone_number }}
+								</div>
+								<div class="col-md-12">
+									{{ element.elements.email }}
+								</div>
+							</div>
+
+							<h3>Tell us a little more about business</h3>
+							<p class="pl-0 text-left w-100">Where do you want your business to be located?</p>
+
+							<div class="row">
+								<div class="col-md-12 form-group mb-4 pb-3">
+									<div class="input-group">
+										{{ element.elements.city2 }}
+										<div class="input-group-prepend input-group-prepend-pipe">
+											<span class="input-group-text p-0 search-pipe"></span>
+										</div>
+										{{ element.elements.state2 }}
+									</div>
+								</div>
+
+								<div class="col-md-12 form-group ">
+									{{ element.elements.property_name34 }}
+								</div>
+
+
+							</div>
+
+							<div class="row">
+								<div class="col-md-6 form-group ">
+
+									<p class="pl-0 text-left w-100">How much space are you looking for?</p>
+									{{ element.elements.sqft }}
+								</div>
+
+								<div class="col-md-6 form-group ">
+									<p class="pl-0 text-left w-100">What type of space are you looking for?</p>
+									{{ element.elements.user_type2 }}
+								</div>
+
+								<div class="col-md-6 form-group ">
+									<p class="pl-0 text-left w-100">What date are you looking to move in?</p>
+									{{ element.elements.date }}
+								</div>
+
+								<div class="col-md-12 form-group ">
+									{{ element.elements.additional_notes }}
+								</div>
+
+							</div>
+
+							<div class="row">
+								<div class="col-md-12 form-group text-left">
+
+									<p class="pl-0 text-left">
+										Do you have an existing business</p>
+									{{ element.elements.do_you_have_an_existing_business }}
+								</div>
+
+								<div class="col-md-6 form-group ">
+									<p class="pl-0 text-left w-100">Tell us the name of your business.</p>
+									{{ element.elements.business_name }}
+								</div>
+								<div class="col-md-6 form-group ">
+									<p class="pl-0 text-left w-100">Where is your business located?</p>
+									{{ element.elements.enter_business_location }}
+								</div>
+								<div class="col-md-6 form-group ">
+									<p class="pl-0 text-left w-100">If your Business has a website, enter it below.</p>
+									{{ element.elements.business_website }}
+								</div>
+							</div>
+
+							{{ element.elements.actions }}
+							{{ title_suffix }}
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="bottomImg"><img src="{{ theme_images_path }}/bannerImages/bottomImg.png"/></div>
+</div>
+{#
+<div class="container-fluid">
+    <div class="raw">
+        <div class="col-md-1">
+        </div>
+
+        <div class="col-md-7">
+            <form{{ attributes }}>
+              {{ title_prefix }}
+              {{ children }}
+              {{ title_suffix }}
+            </form>
+        </div>
+        <div class="col-md-4">
+        </div>
+    </div>
+</div>#}

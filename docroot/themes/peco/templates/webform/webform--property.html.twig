@@ -1,0 +1,43 @@
+{#
+/**
+ * @file
+ * Theme implementation for a 'webform' element.
+ *
+ * This is an copy of the webform.html.twig theme_wrapper which includes the
+ * 'title_prefix' and 'title_suffix' variables needed for
+ * contextual links to appear.
+ *
+ * Available variables
+ * - attributes: A list of HTML attributes for the wrapper element.
+ * - children: The child elements of the webform.
+ * - title_prefix: Additional output populated by modules, intended to be
+ *   displayed in front of the main title tag that appears in the template.
+ * - title_suffix: Additional output populated by modules, intended to be
+ *   displayed after the main title tag that appears in the template.
+ *
+ * @see template_preprocess_webform()
+ * @see _webform_form_after_build()
+ *
+ * @ingroup themeable
+ */
+#}
+<form{{ attributes }}>
+{#<form class="form-inline form-box">#}
+    <div class="input-group mx-0">
+        {#{ title_prefix }}
+        {{ children }}
+        {{ title_suffix }#}
+        {{ element.progress }}
+        {{ element.form_token }}
+        {{ element.form_build_id }}
+        {{ element.form_id }}
+        
+        {{ element.elements.property_id }}
+        {{ element.elements.interested_in_leasing_space }}
+        {#{ element.elements.phone_number }}
+        {{ element.elements.email }#}
+        <input class="form-control border-0 form-tel required" data-webform-required-error="Phone number is required." data-drupal-selector="edit-phone-number" data-msg-maxlength="Phone number field has a maximum length of 128." data-msg-required="Phone number is required." type="tel" id="edit-phone-number" name="phone_number" value="" size="30" maxlength="128" placeholder="Phone Number" required="required" aria-required="true">
+        <input class="form-control border-0 form-email required" data-webform-required-error="Email Address is required." data-drupal-selector="edit-email" data-msg-email="Email does not contain a valid email." data-msg-maxlength="Email field has a maximum length of 254." data-msg-required="Email Address is required." type="email" id="edit-email" name="email" value="" size="60" maxlength="254" placeholder="Email Address" required="required" aria-required="true">
+        {{ element.elements.actions }}        
+    </div>
+</form>

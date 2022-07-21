@@ -1,0 +1,9 @@
+id: property_search_add_custom_null_action
+label: '-- Select --'
+status: true
+langcode: en
+type: node
+plugin: property_search_add_custom_null_action
+dependencies:
+  module:
+    - node

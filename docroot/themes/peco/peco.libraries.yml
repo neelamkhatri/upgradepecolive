@@ -1,0 +1,61 @@
+global-styling:
+  version: 1.x
+#  header: true
+  css:
+    theme:
+      https://fonts.gstatic.com/: { type: external }
+      https://fonts.googleapis.com/css2?family=Source+Serif+Pro:ital,wght@0,200;0,300;0,400;0,600;0,700;0,900;1,200;1,300;1,400;1,600;1,700;1,900&display=swap: { type: external }
+      css/bootstrap.css: {}
+      css/bootstrap-grid.css: {}
+      css/bootstrap-reboot.css: {}
+      css/style.css: {weight: '10'}
+  js:
+    js/bootstrap.min.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupalSettings
+jquery:
+  header: true
+  js:
+    js/jquery-2.2.0.min.js: { minified: true, weight: '-100' }
+slick:
+  version: 1.x
+  header: true
+  css:
+    theme:
+      slick/slick.css: {}
+      slick/slick-theme.css: {}
+  js:
+    js/jquery-2.2.0.min.js: { minified: true, weight: '-2' }
+    slick/slick.js: {weight: '-1'}
+scroll:
+  version: 1.x
+  header: true
+  css:
+    theme:
+      scroll/assets/css/normalize.css: {}
+      scroll/assets/css/style.css: {}
+      scroll/assets/css/examples.css: {}
+  js:
+    scroll/assets/js/lib/highlight.pack.js: {}
+    scroll/assets/js/lib/modernizr.custom.min.js: {}
+    scroll/assets/js/examples.js: {}
+    scroll/scrollmagic/uncompressed/ScrollMagic.js: {}
+    scroll/scrollmagic/uncompressed/plugins/debug.addIndicators.js: {}
+custom:
+  version: 1.x
+  css:
+    theme:
+      css/custom.css: { weight: '10' }
+      css/pecoResponsive.css: { weight: '10' }
+  js:
+    js/custom.js: { weight: '-1' }
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupalSettings
+google-map-api:
+  header: true
+  js:
+    https://maps.googleapis.com/maps/api/js?key=AIzaSyB5rZAF6euUTa0XaIYdfp98Lgr0lAWOX9I: { type: external, defer: true }

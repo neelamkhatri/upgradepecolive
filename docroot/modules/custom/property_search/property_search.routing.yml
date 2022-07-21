@@ -1,0 +1,7 @@
+property_search.autocomplete.keywords:
+  path: '/property_search/autocomplete/keywords'
+  defaults:
+    _controller: '\Drupal\property_search\Controller\PropertyController::handleAutocomplete'
+    _format: json
+  requirements:
+    _access: 'TRUE'

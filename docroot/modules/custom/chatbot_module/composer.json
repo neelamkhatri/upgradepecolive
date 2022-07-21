@@ -1,0 +1,8 @@
+{
+    "name": "peco/chatbot_module",
+    "description": "Dialogflow chatbot",
+    "type": "drupal-module",
+    "require": {
+        "eristemena/dialogflow-fulfillment-webhook-php": "^1.3"
+    }
+}

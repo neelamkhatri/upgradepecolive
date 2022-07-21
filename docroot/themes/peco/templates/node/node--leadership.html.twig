@@ -1,0 +1,168 @@
+{#
+/**
+ * @file
+ * Default theme implementation to display a node.
+ *
+ * Available variables:
+ * - node: The node entity with limited access to object properties and methods.
+ *   Only method names starting with "get", "has", or "is" and a few common
+ *   methods such as "id", "label", and "bundle" are available. For example:
+ *   - node.getCreatedTime() will return the node creation timestamp.
+ *   - node.hasField('field_example') returns TRUE if the node bundle includes
+ *     field_example. (This does not indicate the presence of a value in this
+ *     field.)
+ *   - node.isPublished() will return whether the node is published or not.
+ *   Calling other methods, such as node.delete(), will result in an exception.
+ *   See \Drupal\node\Entity\Node for a full list of public properties and
+ *   methods for the node object.
+ * - label: The title of the node.
+ * - content: All node items. Use {{ content }} to print them all,
+ *   or print a subset such as {{ content.field_example }}. Use
+ *   {{ content|without('field_example') }} to temporarily suppress the printing
+ *   of a given child element.
+ * - author_picture: The node author user entity, rendered using the "compact"
+ *   view mode.
+ * - metadata: Metadata for this node.
+ * - date: Themed creation date field.
+ * - author_name: Themed author name field.
+ * - url: Direct URL of the current node.
+ * - display_submitted: Whether submission information should be displayed.
+ * - attributes: HTML attributes for the containing element.
+ *   The attributes.class element may contain one or more of the following
+ *   classes:
+ *   - node: The current template type (also known as a "theming hook").
+ *   - node--type-[type]: The current node type. For example, if the node is an
+ *     "Article" it would result in "node--type-article". Note that the machine
+ *     name will often be in a short form of the human readable label.
+ *   - node--view-mode-[view_mode]: The View Mode of the node; for example, a
+ *     teaser would result in: "node--view-mode-teaser", and
+ *     full: "node--view-mode-full".
+ *   The following are controlled through the node publishing options.
+ *   - node--promoted: Appears on nodes promoted to the front page.
+ *   - node--sticky: Appears on nodes ordered above other non-sticky nodes in
+ *     teaser listings.
+ *   - node--unpublished: Appears on unpublished nodes visible only to site
+ *     admins.
+ * - title_attributes: Same as attributes, except applied to the main title
+ *   tag that appears in the template.
+ * - content_attributes: Same as attributes, except applied to the main
+ *   content tag that appears in the template.
+ * - author_attributes: Same as attributes, except applied to the author of
+ *   the node tag that appears in the template.
+ * - title_prefix: Additional output populated by modules, intended to be
+ *   displayed in front of the main title tag that appears in the template.
+ * - title_suffix: Additional output populated by modules, intended to be
+ *   displayed after the main title tag that appears in the template.
+ * - view_mode: View mode; for example, "teaser" or "full".
+ * - teaser: Flag for the teaser state. Will be true if view_mode is 'teaser'.
+ * - page: Flag for the full page state. Will be true if view_mode is 'full'.
+ * - readmore: Flag for more state. Will be true if the teaser content of the
+ *   node cannot hold the main body content.
+ * - logged_in: Flag for authenticated user status. Will be true when the
+ *   current user is a logged-in member.
+ * - is_admin: Flag for admin user status. Will be true when the current user
+ *   is an administrator.
+ *
+ * @see template_preprocess_node()
+ *
+ * @todo Remove the id attribute (or make it a class), because if that gets
+ *   rendered twice on a page this is invalid CSS for example: two lists
+ *   in different view modes.
+ *
+ * @ingroup themeable
+ */
+#}
+
+
+{% if view_mode == 'list' %}
+   <div class="leadershipTeamBox">
+       {% if not node.field_teamimage.isempty %}
+        <img src="{{ file_url(node.field_teamimage.entity.fileuri) }}" class="leaderImg" alt="{{ content.field_teamimage['#item'].alt }}">
+    {% else %}
+       {# <img src="{{ theme_images_path }}contactImg.svg" class="leaderImg"> #}
+    {% endif %}
+      <p class="leaderName">{{ label }}</p><br>
+      <p> {{ node.field_designation.0.value|striptags }} </p><br>
+      <p class="w-100 m-0">
+        <a class="btn btn-primary w-100 rounded-0" href="{{ url }}">READ MORE<img src="{{ theme_images_path }}leftArrow.svg"></a>
+      </p>
+    </div>
+
+
+{% elseif view_mode == 'header_block' %}
+  <div class="container-fluid overflow-hidden">
+            <div class="row">
+                <div class="col p-0">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="teamName">{{ label }}<br>
+                                    <span class="designation">{{ node.field_designation.0.value|striptags }}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>                
+            </div>            
+        </div>
+        <div class="banner-img-left topbuildAnimation topbuildAnimationInv mobilehide w-100 p-0">
+            <article class="content animation-element">
+                <div class="rock-5"><img class="float-left" src="/themes/peco/images/bannerImages/topLeftInnerPage.png" /><img class="float-right" src="/themes/peco/images/bannerImages/topRightInnerPage.png" /></div>
+
+                <div class="rock-6"><img class="float-left" src="/themes/peco/images/bannerImages/bottomLeftInnerPage.png" /><img class="float-right" src="/themes/peco/images/bannerImages/bottomRightInnerPage.png" /></div>
+            </article>
+        </div>   
+
+{% else %}
+
+  <div class="main overflow-hidden m-0">
+        <div class="container-fluid py-5">
+            <div class="row">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-md-12">
+                            <ul class="teamContent">
+                                <li class="teamImg">
+
+                              {% if not node.field_teamimage.isempty %}
+                                      <img src="{{ file_url(node.field_teamimage.entity.fileuri) }}" class="img-fluid" alt="{{ content.field_teamimage['#item'].alt }}">
+                                  {% else %}
+                                     {# <img src="{{ theme_images_path }}contactImg.svg" class="img-fluid"> #}
+                                  {% endif %}
+                                </li>
+                                <li class="teamText">
+                                     {{ content.body | raw }} 
+
+                                    {% if '/board-of-directors/' in url %}
+
+                                    {% else %}
+                                        <p><a class="btn btn-primary btn-in"  href="{{ content.field_linkedinurl.0}}" target="_blank" > VIEW LINKEDIN PAGE</a></p>
+                                        <p><a class="btn btn-primary btn-download" href="{{ file_url(node.field_pdf.entity.fileuri) }}" target="_blank">DOWNLOAD PDF</a></p>
+                                        <p class="mb-0"><a class="btn btn-primary btn-download" download="image.jpg" href="{{ file_url(node.field_high_resolution_image.entity.fileuri) }}">DOWNLOAD HIGH RES IMAGE</a></p>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-12">
+                            <img src="{{ theme_images_path }}memberImg.png" class="teamContentBtmImg">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% if node.field_footer_summery.0.value is not empty %}      
+        <div class="container-fluid overflow-hidden py-5 teamSpeech">
+            <div class="row">
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-md-11 teamSpeechContent">
+                            <p> {{ node.field_footer_summery.0.value|striptags }} </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="bottomImg"><img src="/themes/peco/images/bannerImages/bottomImg.png" /></div>         
+    </div>
+
+{% endif %}

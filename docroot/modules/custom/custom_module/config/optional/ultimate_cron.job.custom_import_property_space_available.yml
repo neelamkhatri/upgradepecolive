@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - custom_module
+title: 'Import Property From CSV - Space Available Data'
+id: custom_import_property_space_available
+weight: 0
+module: custom_module
+callback: custom_module_import_property_space_data_callback
+#arguments: ['property']
+scheduler:
+  id: simple
+  configuration:
+    rules:
+      - '0+@ 0 * * *'
+launcher:
+  id: serial
+logger:
+  id: database

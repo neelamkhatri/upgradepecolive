@@ -1,0 +1,5 @@
+# Schema for the configuration files of the Comment module.
+
+action.configuration.property_search_add_custom_null_action:
+  type: action_configuration_default
+  label: 'View bulk operation null action configuration'
