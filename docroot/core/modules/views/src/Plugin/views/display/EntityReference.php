@@ -192,10 +192,8 @@ class EntityReference extends DisplayPluginBase {
     if (!empty($options['ids'])) {
       $this->view->query->addWhere(0, $id_table . '.' . $id_field, $options['ids'], 'IN');
     }
-    if (isset($options['limit'])) {
-      $this->view->setItemsPerPage($options['limit']);
-    }
-    //$this->view->setItemsPerPage($options['limit']);
+
+    $this->view->setItemsPerPage($options['limit']);
   }
 
   /**
