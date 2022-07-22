@@ -2255,7 +2255,3 @@ function custom_module_clear_all_cache ($mode = '') {
         
     }*/
 }
-
-
-
-Hellooooooooo
